@@ -1,101 +1,223 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
+import java.time.*;
+import java.util.*;
+import java.util.List;
+import java.util.stream.Collectors;
 
-public class LaunchPage extends JFrame implements ActionListener{
-    JPanel headerPanel;
-    JPanel selectionPanel;
-    JPanel buttonGroup;
-    JPanel controlPanel;
-    JPanel navButton;
-    JPanel gridPanel;
-    JButton buttonPrev;
-    JButton buttonNext;
-    JComboBox<String> buttonMonth;
-    JComboBox<String> buttonYear;
-    JButton addEvent;
-    JButton dayButtons;
-    ImageIcon icon;
+public class LaunchPage extends JFrame implements ActionListener {
+    JPanel headerPanel, gridPanel;
+    JComboBox<String> buttonMonth, buttonYear;
+    JButton buttonPrev, buttonNext, buttonConflict;
+    FileHandler fileHandler = new FileHandler();
+    List<Event> events = new ArrayList<>();
+    boolean showConflicts = false;
+    
+    Font dayFont = new Font("Arial", Font.BOLD, 25);
+    Font labelFont = new Font("Arial", Font.BOLD, 22);
 
     public LaunchPage() {
-        this.setSize(800, 600);
+        this.setSize(900, 700);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        icon = new ImageIcon("src/resources/icon.png");
-        this.setIconImage(icon.getImage());
-        this.setTitle("Calendar App");
+        this.setTitle("Personal Calendar App");
 
-        // Header Panel setup
-        headerPanel = new JPanel();    
-        headerPanel.setPreferredSize(new Dimension(800, 80));
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10,10));
-        headerPanel.setLayout(new BorderLayout());
+        try { events = fileHandler.loadEvents(); } catch (Exception e) { e.printStackTrace(); }
 
-        // Selection Panel setup
-        selectionPanel = new JPanel(new BorderLayout());
-        selectionPanel.setPreferredSize(new Dimension(200, 100));
-        selectionPanel.setOpaque(false);
-        
-        // Button Group Panel setup
-        buttonGroup = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setPreferredSize(new Dimension(900, 100));
 
-        // Button for Month
+        JPanel buttonGroup = new JPanel();
         buttonMonth = new JComboBox<>(new String[]{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"});
-        buttonMonth.setFocusable(false);
-        buttonGroup.setOpaque(false);
+        buttonYear = new JComboBox<>(new String[]{"2026", "2027", "2028", "2029", "2030"});
+        buttonMonth.addActionListener(this);
+        buttonYear.addActionListener(this);
         buttonGroup.add(buttonMonth);
-
-        // Button for Year
-        buttonYear = new JComboBox<>(new String[]{"2022", "2023", "2024", "2025"});
-        buttonYear.setFocusable(false); 
         buttonGroup.add(buttonYear);
-        
-        selectionPanel.add(buttonGroup, BorderLayout.SOUTH);
-        headerPanel.add(selectionPanel, BorderLayout.WEST);
+        headerPanel.add(buttonGroup, BorderLayout.WEST);
 
-        // Control Panel setup
-        controlPanel = new JPanel(new BorderLayout());
-        controlPanel.setOpaque(false);
-        
-        // Navigation Buttons Panel setup
-        navButton = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
-        navButton.setOpaque(false);
-
-        // Add Event Button
-        addEvent = new JButton("Event");
-        addEvent.setFocusable(false);
-        navButton.add(addEvent);
-        
-        // Previous Buttons
+        JPanel navButton = new JPanel();
+        buttonConflict = new JButton("Check for Conflicts");
         buttonPrev = new JButton("<");
-        buttonPrev.setFocusable(false);
-        navButton.add(buttonPrev);
-        
-        // Next Buttons
         buttonNext = new JButton(">");
-        buttonNext.setFocusable(false);
+
+        buttonConflict.addActionListener(this);
+        buttonPrev.addActionListener(this);
+        buttonNext.addActionListener(this);
+
+        navButton.add(buttonConflict);
+        navButton.add(buttonPrev);
         navButton.add(buttonNext);
-        
-        controlPanel.add(navButton, BorderLayout.SOUTH);
-        headerPanel.add(controlPanel, BorderLayout.EAST);
+        headerPanel.add(navButton, BorderLayout.EAST);
 
-        // Grid Setup
-        gridPanel = new JPanel();
-        gridPanel.setPreferredSize(new Dimension(400, 400));
-        gridPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10,10));
-        gridPanel.setLayout(new GridLayout(7,5));
-        for (int i = 1; i <= 35; i++) {
-            dayButtons = new JButton(String.valueOf(i));
-            dayButtons.setFocusable(false);
-            gridPanel.add(dayButtons);
-        }
-
+        gridPanel = new JPanel(new GridLayout(0, 7, 5, 5));
         this.add(headerPanel, BorderLayout.NORTH);
-        this.add(gridPanel, BorderLayout.CENTER);
+        this.add(new JScrollPane(gridPanel), BorderLayout.CENTER);
+        
+        updateCalendar();
         this.setVisible(true);
     }
 
+    private void updateCalendar() {
+        gridPanel.removeAll();
+        int month = buttonMonth.getSelectedIndex() + 1;
+        int year = Integer.parseInt((String) buttonYear.getSelectedItem());
+        LocalDate today = LocalDate.now();
+
+        LocalDate firstDay = LocalDate.of(year, month, 1);
+        int startDay = firstDay.getDayOfWeek().getValue() % 7;
+        
+        String[] days = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+        for (String d : days) {
+            JLabel lbl = new JLabel(d, SwingConstants.CENTER);
+            lbl.setFont(labelFont);
+            gridPanel.add(lbl);
+        }
+
+        for (int i = 0; i < startDay; i++) gridPanel.add(new JLabel(""));
+
+        for (int i = 1; i <= firstDay.lengthOfMonth(); i++) {
+            final int day = i;
+            JButton dayBtn = new JButton(String.valueOf(i));
+            dayBtn.setFont(dayFont);
+            LocalDate dateObj = LocalDate.of(year, month, day);
+
+            List<Event> dayEvents = events.stream()
+                .filter(e -> e.getStart().toLocalDate().equals(dateObj))
+                .collect(Collectors.toList());
+
+            if (!dayEvents.isEmpty()) {
+                if (showConflicts) {
+                    boolean hasConflict = checkForConflictOnDate(dayEvents);
+                    dayBtn.setBackground(hasConflict ? new Color(255, 102, 102) : new Color(144, 238, 144));
+                    dayBtn.setOpaque(true);
+                    dayBtn.setBorderPainted(false);
+                } else {
+                    dayBtn.setBackground(new Color(173, 216, 230));
+                }
+            }
+
+            // Subtler Today highlight (Yellow Border)
+            if (dateObj.equals(today)) {
+                dayBtn.setBorder(BorderFactory.createLineBorder(Color.BLACK, 3));
+            }
+
+            dayBtn.addActionListener(e -> showDayEvents(year, month, day));
+            gridPanel.add(dayBtn);
+        }
+        gridPanel.revalidate();
+        gridPanel.repaint();
+    }
+
+    private boolean checkForConflictOnDate(List<Event> dayEvents) {
+        for (int i = 0; i < dayEvents.size(); i++) {
+            for (int j = i + 1; j < dayEvents.size(); j++) {
+                Event a = dayEvents.get(i);
+                Event b = dayEvents.get(j);
+                // Standard overlap logic
+                if (a.getStart().isBefore(b.getEnd()) && a.getEnd().isAfter(b.getStart())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void showDayEvents(int y, int m, int d) {
+        LocalDate date = LocalDate.of(y, m, d);
+        List<Event> dayEvents = events.stream()
+            .filter(e -> e.getStart().toLocalDate().equals(date))
+            .collect(Collectors.toList());
+
+        StringBuilder sb = new StringBuilder("Events for " + date + ":\n");
+        if (dayEvents.isEmpty()) sb.append("No events scheduled.");
+        
+        for (int i = 0; i < dayEvents.size(); i++) {
+            Event e = dayEvents.get(i);
+            sb.append(i + 1).append(". ").append(e.getStart().toLocalTime())
+              .append(" - ").append(e.getTitle()).append("\n");
+        }
+
+        Object[] options = {"Add New", "Delete Event", "Close"};
+        int choice = JOptionPane.showOptionDialog(this, sb.toString(), "Day View",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[2]);
+
+        if (choice == 0) {
+            createNewEvent(date);
+        } else if (choice == 1 && !dayEvents.isEmpty()) {
+            String input = JOptionPane.showInputDialog("Enter the number of the event to delete:");
+            try {
+                int index = Integer.parseInt(input) - 1;
+                events.remove(dayEvents.get(index));
+                fileHandler.saveEvents(events);
+                updateCalendar();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Invalid selection.");
+            }
+        }
+    }
+
+    private void createNewEvent(LocalDate targetDate) {
+        JTextField titleField = new JTextField();
+        JTextField startField = new JTextField("12:00");
+        JTextField endField = new JTextField("13:00");
+        
+        Object[] message = {
+            "Date: " + targetDate,
+            "Event Title:", titleField,
+            "Start Time (HH:mm):", startField,
+            "End Time (HH:mm):", endField
+        };
+
+        int option = JOptionPane.showConfirmDialog(null, message, "New Event", JOptionPane.OK_CANCEL_OPTION);
+        if (option == JOptionPane.OK_OPTION) {
+            try {
+                LocalTime startTime = LocalTime.parse(startField.getText());
+                LocalTime endTime = LocalTime.parse(endField.getText());
+
+                if (endTime.isBefore(startTime)) {
+                    JOptionPane.showMessageDialog(this, "Error: End time must be later than start time.");
+                    return;
+                }
+
+                LocalDateTime startDT = LocalDateTime.of(targetDate, startTime);
+                LocalDateTime endDT = LocalDateTime.of(targetDate, endTime);
+
+                events.add(new Event(events.size() + 1, titleField.getText(), "Manual Entry", startDT, endDT));
+                fileHandler.saveEvents(events);
+                updateCalendar();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Invalid Time Format. Use HH:mm (e.g., 14:30)");
+            }
+        }
+    }
+
     @Override
-    public void actionPerformed(java.awt.event.ActionEvent e) {
-        // Handle action events here
+    public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == buttonConflict) {
+            showConflicts = !showConflicts;
+            buttonConflict.setText(showConflicts ? "Hide Conflicts" : "Check for Conflicts");
+            updateCalendar();
+        } else if (e.getSource() == buttonPrev) {
+            navigateMonth(-1);
+        } else if (e.getSource() == buttonNext) {
+            navigateMonth(1);
+        } else if (e.getSource() == buttonMonth || e.getSource() == buttonYear) {
+            updateCalendar();
+        }
+    }
+
+    private void navigateMonth(int diff) {
+        int month = buttonMonth.getSelectedIndex() + diff;
+        if (month < 0) {
+            month = 11;
+            int yearIdx = buttonYear.getSelectedIndex();
+            if (yearIdx > 0) buttonYear.setSelectedIndex(yearIdx - 1);
+        } else if (month > 11) {
+            month = 0;
+            int yearIdx = buttonYear.getSelectedIndex();
+            if (yearIdx < buttonYear.getItemCount() - 1) buttonYear.setSelectedIndex(yearIdx + 1);
+        }
+        buttonMonth.setSelectedIndex(month);
     }
 }
