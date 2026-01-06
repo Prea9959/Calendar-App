@@ -234,7 +234,8 @@ public class LaunchPage extends JFrame implements ActionListener {
     }
 
     private void navigateMonth(int diff) {
-        // Capture current entire content pane rendering (so the slide covers full area)
+        // Capture current UI as an image (before month change) 
+        // We animate images instead of moving Swing components to avoid layout issues
         Container content = this.getContentPane();
         Dimension csize = content.getSize();
         if (csize.width <= 0 || csize.height <= 0) csize = this.getSize();
@@ -243,6 +244,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         content.paint(g);
         g.dispose();
 
+        // Update month/year state (no animation logic here)
         int month = buttonMonth.getSelectedIndex() + diff;
         if (month < 0) {
             month = 11;
@@ -265,8 +267,10 @@ public class LaunchPage extends JFrame implements ActionListener {
         content2.paint(g2);
         g2.dispose();
 
-        // Determine direction: moving forward => slide left
+        // Choose slide direction based on navigation
+        // Forward navigation slides left, backward slides right
         Animator.Direction dir = diff > 0 ? Animator.Direction.LEFT : Animator.Direction.RIGHT;
+        // Run slide animation using the Animator utility
         Animator.slideTransition(this, gridPanel, before, after, dir, 300);
     }
 }
