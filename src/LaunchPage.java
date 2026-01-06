@@ -1,5 +1,6 @@
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.awt.event.*;
 import java.time.*;
 import java.util.*;
@@ -89,11 +90,37 @@ public class LaunchPage extends JFrame implements ActionListener {
             if (!dayEvents.isEmpty()) {
                 if (showConflicts) {
                     boolean hasConflict = checkForConflictOnDate(dayEvents);
-                    dayBtn.setBackground(hasConflict ? new Color(255, 102, 102) : new Color(144, 238, 144));
-                    dayBtn.setOpaque(true);
-                    dayBtn.setBorderPainted(false);
+                    Color conflictColor = new Color(255, 102, 102);
+                    Color conflictDark = new Color(178, 34, 34);
+                    Color okColor = new Color(144, 238, 144);
+                    Color okDark = new Color(34, 139, 34);
+
+                    if (hasConflict) {
+                        dayBtn.setBackground(conflictColor);
+                        dayBtn.setOpaque(true);
+                        dayBtn.setBorder(BorderFactory.createCompoundBorder(
+                                BorderFactory.createLineBorder(conflictDark, 2),
+                                BorderFactory.createEmptyBorder(2, 2, 2, 2)
+                        ));
+                    } else {
+                        dayBtn.setBackground(okColor);
+                        dayBtn.setOpaque(true);
+                        dayBtn.setBorder(BorderFactory.createCompoundBorder(
+                                BorderFactory.createLineBorder(okDark, 2),
+                                BorderFactory.createEmptyBorder(2, 2, 2, 2)
+                        ));
+                    }
+                    dayBtn.setBorderPainted(true);
                 } else {
-                    dayBtn.setBackground(new Color(173, 216, 230));
+                    Color blueColor = new Color(173, 216, 230);
+                    Color blueDark = new Color(70, 130, 180);
+                    dayBtn.setBackground(blueColor);
+                    dayBtn.setOpaque(true);
+                    dayBtn.setBorder(BorderFactory.createCompoundBorder(
+                            BorderFactory.createLineBorder(blueDark, 2),
+                            BorderFactory.createEmptyBorder(2, 2, 2, 2)
+                    ));
+                    dayBtn.setBorderPainted(true);
                 }
             }
 
@@ -163,8 +190,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         JTextField endField = new JTextField("13:00");
         
         Object[] message = {
-            "Date: " + targetDate,
-            "Event Title:", titleField,
+            "Title:", titleField,
             "Start Time (HH:mm):", startField,
             "End Time (HH:mm):", endField
         };
@@ -208,6 +234,15 @@ public class LaunchPage extends JFrame implements ActionListener {
     }
 
     private void navigateMonth(int diff) {
+        // Capture current entire content pane rendering (so the slide covers full area)
+        Container content = this.getContentPane();
+        Dimension csize = content.getSize();
+        if (csize.width <= 0 || csize.height <= 0) csize = this.getSize();
+        BufferedImage before = new BufferedImage(csize.width, csize.height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = before.createGraphics();
+        content.paint(g);
+        g.dispose();
+
         int month = buttonMonth.getSelectedIndex() + diff;
         if (month < 0) {
             month = 11;
@@ -219,5 +254,19 @@ public class LaunchPage extends JFrame implements ActionListener {
             if (yearIdx < buttonYear.getItemCount() - 1) buttonYear.setSelectedIndex(yearIdx + 1);
         }
         buttonMonth.setSelectedIndex(month);
+
+        // Force calendar rebuild and capture after state change
+        updateCalendar();
+        Container content2 = this.getContentPane();
+        Dimension csize2 = content2.getSize();
+        if (csize2.width <= 0 || csize2.height <= 0) csize2 = this.getSize();
+        BufferedImage after = new BufferedImage(csize2.width, csize2.height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = after.createGraphics();
+        content2.paint(g2);
+        g2.dispose();
+
+        // Determine direction: moving forward => slide left
+        Animator.Direction dir = diff > 0 ? Animator.Direction.LEFT : Animator.Direction.RIGHT;
+        Animator.slideTransition(this, gridPanel, before, after, dir, 300);
     }
 }
