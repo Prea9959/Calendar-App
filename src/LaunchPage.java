@@ -16,7 +16,7 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     private ViewMode currentMode = ViewMode.CALENDAR;
     private TimeScale currentScale = TimeScale.MONTH;
-    private LocalDate referenceDate = LocalDate.now(); // The anchor for all navigation
+    private LocalDate referenceDate = LocalDate.now(); 
 
     // UI Components
     JPanel headerPanel, contentPanel;
@@ -31,6 +31,7 @@ public class LaunchPage extends JFrame implements ActionListener {
     // Design
     Font dayFont = new Font("Arial", Font.BOLD, 18);
     Font labelFont = new Font("Arial", Font.BOLD, 14);
+    // FIX: Using the dateFormat variable for window titles and logs
     private final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     public LaunchPage() {
@@ -88,12 +89,9 @@ public class LaunchPage extends JFrame implements ActionListener {
     private void refreshUI() {
         contentPanel.removeAll();
         
-        // Update the title/header info based on referenceDate
-        String title = referenceDate.getMonth().toString() + " " + referenceDate.getYear();
-        if (currentScale == TimeScale.WEEK) title = "Week of " + getStartOfWeek(referenceDate);
-        if (currentScale == TimeScale.DAY) title = "Day: " + referenceDate;
-        
-        this.setTitle("Calendar - " + title + " (" + currentMode + ")");
+        // Use dateFormat to format the title bar
+        String dateString = referenceDate.format(dateFormat);
+        this.setTitle("Calendar - " + dateString + " (" + currentMode + ")");
 
         if (currentMode == ViewMode.CALENDAR) {
             renderCalendarView();
@@ -118,7 +116,6 @@ public class LaunchPage extends JFrame implements ActionListener {
         LocalDate start = getStartOfRange();
         int length = (currentScale == TimeScale.MONTH) ? referenceDate.lengthOfMonth() : 7;
         
-        // Padding for Month view
         if (currentScale == TimeScale.MONTH) {
             int startPadding = referenceDate.withDayOfMonth(1).getDayOfWeek().getValue() % 7;
             for (int i = 0; i < startPadding; i++) grid.add(new JLabel(""));
@@ -152,7 +149,6 @@ public class LaunchPage extends JFrame implements ActionListener {
         return btn;
     }
 
-    // --- LIST RENDERING ---
     private void renderListView() {
         JPanel listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
@@ -197,7 +193,6 @@ public class LaunchPage extends JFrame implements ActionListener {
         return row;
     }
 
-    // --- LOGIC HELPERS ---
     private LocalDate getStartOfRange() {
         switch (currentScale) {
             case DAY: return referenceDate;
@@ -247,19 +242,30 @@ public class LaunchPage extends JFrame implements ActionListener {
         return false;
     }
 
+    // FIX: Re-implemented BufferedImage logic for transitions
     private void navigate(int direction) {
+        Container content = this.getContentPane();
+        BufferedImage before = new BufferedImage(content.getWidth(), content.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        content.paint(before.getGraphics());
+
         switch (currentScale) {
             case DAY: referenceDate = referenceDate.plusDays(direction); break;
             case WEEK: referenceDate = referenceDate.plusWeeks(direction); break;
             case MONTH: referenceDate = referenceDate.plusMonths(direction); break;
         }
+        
         refreshUI();
+
+        BufferedImage after = new BufferedImage(content.getWidth(), content.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        content.paint(after.getGraphics());
+
+        Animator.Direction animDir = (direction > 0) ? Animator.Direction.LEFT : Animator.Direction.RIGHT;
+        Animator.slideTransition(this, contentPanel, before, after, animDir, 300, () -> {});
     }
 
-    // --- EVENT MANAGEMENT (REUSED FROM YOUR CODE) ---
     private void showDayEvents(LocalDate date) {
         List<Event> dayEvents = getEventsOnDate(date);
-        StringBuilder sb = new StringBuilder("Events for " + date + ":\n");
+        StringBuilder sb = new StringBuilder("Events for " + date.format(dateFormat) + ":\n");
         for (int i = 0; i < dayEvents.size(); i++) sb.append(i + 1).append(". ").append(dayEvents.get(i).getTitle()).append("\n");
         
         Object[] options = {"Add New", "Edit", "Delete", "Close"};
@@ -300,37 +306,28 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        if (e.getSource() == buttonPrev) {
-            navigate(-1);
-        } else if (e.getSource() == buttonNext) {
-            navigate(1);
-        } else if (e.getSource() == buttonAdd) {
-            createOrUpdateEvent(null, referenceDate);
-        } else if (e.getSource() == buttonConflict) {
+        if (e.getSource() == buttonPrev) navigate(-1);
+        else if (e.getSource() == buttonNext) navigate(1);
+        else if (e.getSource() == buttonAdd) createOrUpdateEvent(null, referenceDate);
+        else if (e.getSource() == buttonConflict) {
             showConflicts = !showConflicts;
             buttonConflict.setText(showConflicts ? "Hide Conflicts" : "Conflicts");
             refreshUI();
-        } else if (e.getSource() == buttonSearch) {
-            handleSearch();
-        } else if (e.getSource() == buttonBackup) {
+        } else if (e.getSource() == buttonSearch) handleSearch();
+        else if (e.getSource() == buttonBackup) {
             try {
                 fileHandler.backup("calendar_backup.zip");
                 JOptionPane.showMessageDialog(this, "Data successfully backed up to calendar_backup.zip");
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Backup failed: " + ex.getMessage());
-            }
+            } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Backup failed: " + ex.getMessage()); }
         } else if (e.getSource() == buttonRestore) {
-            int confirm = JOptionPane.showConfirmDialog(this, 
-                "Restoring will overwrite current events. Continue?", "Confirm Restore", JOptionPane.YES_NO_OPTION);
+            int confirm = JOptionPane.showConfirmDialog(this, "Restoring will overwrite current events. Continue?", "Confirm Restore", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
                 try {
                     fileHandler.restore("calendar_backup.zip");
                     events = fileHandler.loadEvents();
                     refreshUI();
                     JOptionPane.showMessageDialog(this, "Restore complete!");
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Restore failed: Make sure calendar_backup.zip exists.");
-                }
+                } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Restore failed."); }
             }
         }
     }
@@ -341,11 +338,9 @@ public class LaunchPage extends JFrame implements ActionListener {
             List<Event> results = events.stream()
                 .filter(ev -> ev.getTitle().toLowerCase().contains(query.toLowerCase()))
                 .collect(Collectors.toList());
-            
             if (results.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "No events found matching: " + query);
             } else {
-                // Temporarily switch to LIST view to show search results
                 currentMode = ViewMode.LIST;
                 viewToggle.setSelectedItem(ViewMode.LIST);
                 displaySearchResults(results, query);
@@ -359,12 +354,10 @@ public class LaunchPage extends JFrame implements ActionListener {
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
         listPanel.add(new JLabel("Search Results for: " + query));
         listPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-
         for (Event ev : results) {
             listPanel.add(createEventRow(ev));
             listPanel.add(Box.createRigidArea(new Dimension(0, 5)));
         }
-        
         contentPanel.add(listPanel, BorderLayout.NORTH);
         contentPanel.revalidate();
         contentPanel.repaint();
