@@ -1,6 +1,5 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.awt.event.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -223,6 +222,9 @@ public class LaunchPage extends JFrame implements ActionListener {
         JTextField startField = new JTextField(existing != null ? existing.getStart().toLocalTime().toString() : "12:00");
         JTextField endField = new JTextField(existing != null ? existing.getEnd().toLocalTime().toString() : "13:00");
         JComboBox<String> recurBox = new JComboBox<>(new String[]{"NONE", "DAILY", "WEEKLY", "MONTHLY"});
+        if (existing != null) {
+            recurBox.setSelectedItem(existing.getRecurType()); // Reset the dropdown to the saved value
+        }
         JTextField countField = new JTextField(existing != null ? String.valueOf(existing.getRecurCount()) : "1");
 
         Object[] message = { "Title:", titleField, "Start (HH:mm):", startField, "End (HH:mm):", endField, "Repeat:", recurBox, "Count:", countField };
