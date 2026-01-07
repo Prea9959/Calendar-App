@@ -8,7 +8,8 @@ public class FileHandler {
     private final String EVENT_FILE = "data/event.csv";
 
     public FileHandler() {
-        new File(DATA_DIR).mkdirs();
+    File dir = new File("data");
+    if (!dir.exists()) dir.mkdir();
     }
 
     public void saveEvents(List<Event> events) throws IOException {
