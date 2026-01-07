@@ -2,6 +2,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -9,13 +10,16 @@ import java.util.stream.Collectors;
 public class LaunchPage extends JFrame implements ActionListener {
     JPanel headerPanel, gridPanel;
     JComboBox<String> buttonMonth, buttonYear;
-    JButton buttonPrev, buttonNext, buttonConflict;
+    JButton buttonPrev, buttonNext, buttonConflict, buttonSearch;
     FileHandler fileHandler = new FileHandler();
     List<Event> events = new ArrayList<>();
     boolean showConflicts = false;
-    
+
     Font dayFont = new Font("Arial", Font.BOLD, 25);
     Font labelFont = new Font("Arial", Font.BOLD, 22);
+
+    // Custom Date Format for display
+    private final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     public LaunchPage() {
         this.setSize(900, 700);
@@ -37,14 +41,17 @@ public class LaunchPage extends JFrame implements ActionListener {
         headerPanel.add(buttonGroup, BorderLayout.WEST);
 
         JPanel navButton = new JPanel();
+        buttonSearch = new JButton("Search");
         buttonConflict = new JButton("Check for Conflicts");
         buttonPrev = new JButton("<");
         buttonNext = new JButton(">");
 
+        buttonSearch.addActionListener(this);
         buttonConflict.addActionListener(this);
         buttonPrev.addActionListener(this);
         buttonNext.addActionListener(this);
 
+        navButton.add(buttonSearch);
         navButton.add(buttonConflict);
         navButton.add(buttonPrev);
         navButton.add(buttonNext);
@@ -53,7 +60,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         gridPanel = new JPanel(new GridLayout(0, 7, 5, 5));
         this.add(headerPanel, BorderLayout.NORTH);
         this.add(new JScrollPane(gridPanel), BorderLayout.CENTER);
-        
+
         updateCalendar();
         this.setVisible(true);
     }
@@ -66,7 +73,7 @@ public class LaunchPage extends JFrame implements ActionListener {
 
         LocalDate firstDay = LocalDate.of(year, month, 1);
         int startDay = firstDay.getDayOfWeek().getValue() % 7;
-        
+
         String[] days = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
         for (String d : days) {
             JLabel lbl = new JLabel(d, SwingConstants.CENTER);
@@ -83,21 +90,46 @@ public class LaunchPage extends JFrame implements ActionListener {
             LocalDate dateObj = LocalDate.of(year, month, day);
 
             List<Event> dayEvents = events.stream()
-                .filter(e -> e.getStart().toLocalDate().equals(dateObj))
-                .collect(Collectors.toList());
+                    .filter(e -> e.getStart().toLocalDate().equals(dateObj))
+                    .collect(Collectors.toList());
 
             if (!dayEvents.isEmpty()) {
                 if (showConflicts) {
                     boolean hasConflict = checkForConflictOnDate(dayEvents);
-                    dayBtn.setBackground(hasConflict ? new Color(255, 102, 102) : new Color(144, 238, 144));
-                    dayBtn.setOpaque(true);
-                    dayBtn.setBorderPainted(false);
+                    Color conflictColor = new Color(255, 102, 102);
+                    Color conflictDark = new Color(178, 34, 34);
+                    Color okColor = new Color(144, 238, 144);
+                    Color okDark = new Color(34, 139, 34);
+
+                    if (hasConflict) {
+                        dayBtn.setBackground(conflictColor);
+                        dayBtn.setOpaque(true);
+                        dayBtn.setBorder(BorderFactory.createCompoundBorder(
+                                BorderFactory.createLineBorder(conflictDark, 2),
+                                BorderFactory.createEmptyBorder(2, 2, 2, 2)
+                        ));
+                    } else {
+                        dayBtn.setBackground(okColor);
+                        dayBtn.setOpaque(true);
+                        dayBtn.setBorder(BorderFactory.createCompoundBorder(
+                                BorderFactory.createLineBorder(okDark, 2),
+                                BorderFactory.createEmptyBorder(2, 2, 2, 2)
+                        ));
+                    }
+                    dayBtn.setBorderPainted(true);
                 } else {
-                    dayBtn.setBackground(new Color(173, 216, 230));
+                    Color blueColor = new Color(173, 216, 230);
+                    Color blueDark = new Color(70, 130, 180);
+                    dayBtn.setBackground(blueColor);
+                    dayBtn.setOpaque(true);
+                    dayBtn.setBorder(BorderFactory.createCompoundBorder(
+                            BorderFactory.createLineBorder(blueDark, 2),
+                            BorderFactory.createEmptyBorder(2, 2, 2, 2)
+                    ));
+                    dayBtn.setBorderPainted(true);
                 }
             }
 
-            // Subtler Today highlight (Yellow Border)
             if (dateObj.equals(today)) {
                 dayBtn.setBorder(BorderFactory.createLineBorder(Color.BLACK, 3));
             }
@@ -114,7 +146,6 @@ public class LaunchPage extends JFrame implements ActionListener {
             for (int j = i + 1; j < dayEvents.size(); j++) {
                 Event a = dayEvents.get(i);
                 Event b = dayEvents.get(j);
-                // Standard overlap logic
                 if (a.getStart().isBefore(b.getEnd()) && a.getEnd().isAfter(b.getStart())) {
                     return true;
                 }
@@ -126,16 +157,16 @@ public class LaunchPage extends JFrame implements ActionListener {
     private void showDayEvents(int y, int m, int d) {
         LocalDate date = LocalDate.of(y, m, d);
         List<Event> dayEvents = events.stream()
-            .filter(e -> e.getStart().toLocalDate().equals(date))
-            .collect(Collectors.toList());
+                .filter(e -> e.getStart().toLocalDate().equals(date))
+                .collect(Collectors.toList());
 
-        StringBuilder sb = new StringBuilder("Events for " + date + ":\n");
+        StringBuilder sb = new StringBuilder("Events for " + date.format(dateFormat) + ":\n");
         if (dayEvents.isEmpty()) sb.append("No events scheduled.");
-        
+
         for (int i = 0; i < dayEvents.size(); i++) {
             Event e = dayEvents.get(i);
             sb.append(i + 1).append(". ").append(e.getStart().toLocalTime())
-              .append(" - ").append(e.getTitle()).append("\n");
+                    .append(" - ").append(e.getTitle()).append("\n");
         }
 
         Object[] options = {"Add New", "Delete Event", "Close"};
@@ -161,12 +192,11 @@ public class LaunchPage extends JFrame implements ActionListener {
         JTextField titleField = new JTextField();
         JTextField startField = new JTextField("12:00");
         JTextField endField = new JTextField("13:00");
-        
+
         Object[] message = {
-            "Date: " + targetDate,
-            "Event Title:", titleField,
-            "Start Time (HH:mm):", startField,
-            "End Time (HH:mm):", endField
+                "Title:", titleField,
+                "Start Time (HH:mm):", startField,
+                "End Time (HH:mm):", endField
         };
 
         int option = JOptionPane.showConfirmDialog(null, message, "New Event", JOptionPane.OK_CANCEL_OPTION);
@@ -192,12 +222,154 @@ public class LaunchPage extends JFrame implements ActionListener {
         }
     }
 
+    // Search functions
+    private void searchEvents() {
+        JTextField nameField = new JTextField();
+
+        // Date components (Day: 1-31, Month: 1-12, Year: 2025-2030)
+        String[] days = new String[31];
+        for (int i = 0; i < 31; i++) days[i] = String.format("%02d", i + 1);
+
+        String[] months = new String[12];
+        for (int i = 0; i < 12; i++) months[i] = String.format("%02d", i + 1);
+
+        String[] years = {"2025", "2026", "2027", "2028", "2029", "2030"};
+
+        // Start Date Combos
+        JComboBox<String> startDay = new JComboBox<>(days);
+        JComboBox<String> startMonth = new JComboBox<>(months);
+        JComboBox<String> startYear = new JComboBox<>(years);
+
+        // End Date Combos
+        JComboBox<String> endDay = new JComboBox<>(days);
+        JComboBox<String> endMonth = new JComboBox<>(months);
+        JComboBox<String> endYear = new JComboBox<>(years);
+        JCheckBox enableRange = new JCheckBox("Search Date Range?");
+
+        // Default to today
+        LocalDate now = LocalDate.now();
+        setComboDate(now, startDay, startMonth, startYear);
+        setComboDate(now, endDay, endMonth, endYear);
+
+        // Initially disable end date fields until checkbox is ticked
+        toggleFields(false, endDay, endMonth, endYear);
+        enableRange.addActionListener(e -> toggleFields(enableRange.isSelected(), endDay, endMonth, endYear));
+
+        // Layout the search panel
+        JPanel panel = new JPanel(new GridLayout(0, 1, 5, 5));
+        panel.add(new JLabel("Event Name (Optional):"));
+        panel.add(nameField);
+
+        panel.add(new JLabel("Start Date (DD-MM-YYYY):"));
+        JPanel startPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        startPanel.add(startDay); startPanel.add(new JLabel("-"));
+        startPanel.add(startMonth); startPanel.add(new JLabel("-"));
+        startPanel.add(startYear);
+        panel.add(startPanel);
+
+        panel.add(enableRange);
+
+        JPanel endPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        endPanel.add(endDay); endPanel.add(new JLabel("-"));
+        endPanel.add(endMonth); endPanel.add(new JLabel("-"));
+        endPanel.add(endYear);
+        panel.add(endPanel);
+
+        int option = JOptionPane.showConfirmDialog(this, panel, "Search Events", JOptionPane.OK_CANCEL_OPTION);
+
+        if (option == JOptionPane.OK_OPTION) {
+            try {
+                String nameQuery = nameField.getText().trim().toLowerCase();
+
+                // Construct Dates from Dropdowns
+                LocalDate startDate = getComboDate(startDay, startMonth, startYear);
+                LocalDate endDate;
+
+                if (enableRange.isSelected()) {
+                    endDate = getComboDate(endDay, endMonth, endYear);
+                } else {
+                    endDate = startDate; // Single day search
+                }
+
+                if (endDate.isBefore(startDate)) {
+                    LocalDate temp = startDate;
+                    startDate = endDate;
+                    endDate = temp;
+                }
+
+                final LocalDate finalStart = startDate;
+                final LocalDate finalEnd = endDate;
+
+                List<Event> foundEvents = events.stream()
+                        .filter(e -> {
+                            LocalDate eStart = e.getStart().toLocalDate();
+                            LocalDate eEnd = e.getEnd().toLocalDate();
+                            boolean dateMatch = !eStart.isAfter(finalEnd) && !eEnd.isBefore(finalStart);
+                            boolean nameMatch = nameQuery.isEmpty() || e.getTitle().toLowerCase().contains(nameQuery);
+                            return dateMatch && nameMatch;
+                        })
+                        .sorted(Comparator.comparing(Event::getStart))
+                        .collect(Collectors.toList());
+
+                displaySearchResults(foundEvents, finalStart, finalEnd);
+
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Invalid Date Selection (e.g., Feb 30). Please try again.");
+            }
+        }
+    }
+
+    private void setComboDate(LocalDate date, JComboBox<String> d, JComboBox<String> m, JComboBox<String> y) {
+        d.setSelectedItem(String.format("%02d", date.getDayOfMonth()));
+        m.setSelectedItem(String.format("%02d", date.getMonthValue()));
+        y.setSelectedItem(String.valueOf(date.getYear()));
+    }
+
+    // Extract date from dropdown
+    private LocalDate getComboDate(JComboBox<String> d, JComboBox<String> m, JComboBox<String> y) {
+        int day = Integer.parseInt((String) d.getSelectedItem());
+        int month = Integer.parseInt((String) m.getSelectedItem());
+        int year = Integer.parseInt((String) y.getSelectedItem());
+        return LocalDate.of(year, month, day);
+    }
+
+    private void toggleFields(boolean state, JComponent... comps) {
+        for (JComponent c : comps) c.setEnabled(state);
+    }
+
+
+    private void displaySearchResults(List<Event> found, LocalDate start, LocalDate end) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Results for \"").append(start.format(dateFormat)).append("\" to \"").append(end.format(dateFormat)).append("\":\n\n");
+
+        if (found.isEmpty()) {
+            sb.append("No events found.");
+        } else {
+            DateTimeFormatter displayFmt = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm");
+            for (Event e : found) {
+                sb.append("• ").append(e.getTitle())
+                        .append(" (").append(e.getStart().format(displayFmt))
+                        .append(" - ").append(e.getEnd().format(displayFmt))
+                        .append(")\n");
+            }
+        }
+
+        JTextArea textArea = new JTextArea(sb.toString());
+        textArea.setEditable(false);
+        textArea.setRows(15);
+        textArea.setColumns(45);
+
+        JOptionPane.showMessageDialog(this, new JScrollPane(textArea), "Search Results", JOptionPane.INFORMATION_MESSAGE);
+    }
+
     @Override
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == buttonConflict) {
             showConflicts = !showConflicts;
             buttonConflict.setText(showConflicts ? "Hide Conflicts" : "Check for Conflicts");
             updateCalendar();
+        } else if (e.getSource() == buttonSearch) {
+            searchEvents();
         } else if (e.getSource() == buttonPrev) {
             navigateMonth(-1);
         } else if (e.getSource() == buttonNext) {
@@ -219,5 +391,6 @@ public class LaunchPage extends JFrame implements ActionListener {
             if (yearIdx < buttonYear.getItemCount() - 1) buttonYear.setSelectedIndex(yearIdx + 1);
         }
         buttonMonth.setSelectedIndex(month);
+        updateCalendar();
     }
 }
