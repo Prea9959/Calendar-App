@@ -45,4 +45,15 @@ public class FileHandler {
         Files.copy(file.toPath(), zos);
         zos.closeEntry();
     }
+
+    public void restore(String zipPath) throws IOException {
+    try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipPath))) {
+        ZipEntry entry;
+        while ((entry = zis.getNextEntry()) != null) {
+            Path destPath = Paths.get(DATA_DIR, entry.getName());
+            Files.copy(zis, destPath, StandardCopyOption.REPLACE_EXISTING);
+            zis.closeEntry();
+            }
+        }
+    }
 }

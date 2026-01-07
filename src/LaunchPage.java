@@ -1,6 +1,6 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.image.BufferedImage; // Required for animation
+import java.awt.image.BufferedImage;
 import java.awt.event.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -11,21 +11,19 @@ import java.util.stream.Collectors;
 public class LaunchPage extends JFrame implements ActionListener {
     JPanel headerPanel, gridPanel;
     JComboBox<String> buttonMonth, buttonYear;
-    JButton buttonPrev, buttonNext, buttonConflict, buttonSearch;
+    JButton buttonPrev, buttonNext, buttonConflict, buttonSearch, buttonBackup, buttonRestore;
     FileHandler fileHandler = new FileHandler();
     List<Event> events = new ArrayList<>();
     boolean showConflicts = false;
 
     Font dayFont = new Font("Arial", Font.BOLD, 25);
     Font labelFont = new Font("Arial", Font.BOLD, 22);
-
-    // Custom Date Format for display
     private final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     public LaunchPage() {
-        this.setSize(900, 700);
+        this.setSize(1000, 700); // Widened slightly for new buttons
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        this.setTitle("Personal Calendar App");
+        this.setTitle("Personal Calendar App - Pro Version");
 
         try { events = fileHandler.loadEvents(); } catch (Exception e) { e.printStackTrace(); }
 
@@ -34,7 +32,7 @@ public class LaunchPage extends JFrame implements ActionListener {
 
         JPanel buttonGroup = new JPanel();
         buttonMonth = new JComboBox<>(new String[]{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"});
-        buttonYear = new JComboBox<>(new String[]{"2026", "2027", "2028", "2029", "2030"});
+        buttonYear = new JComboBox<>(new String[]{"2025", "2026", "2027", "2028", "2029", "2030"});
         buttonMonth.addActionListener(this);
         buttonYear.addActionListener(this);
         buttonGroup.add(buttonMonth);
@@ -43,17 +41,23 @@ public class LaunchPage extends JFrame implements ActionListener {
 
         JPanel navButton = new JPanel();
         buttonSearch = new JButton("Search");
-        buttonConflict = new JButton("Check for Conflicts");
+        buttonConflict = new JButton("Conflicts");
+        buttonBackup = new JButton("Backup");
+        buttonRestore = new JButton("Restore");
         buttonPrev = new JButton("<");
         buttonNext = new JButton(">");
 
         buttonSearch.addActionListener(this);
         buttonConflict.addActionListener(this);
+        buttonBackup.addActionListener(this);
+        buttonRestore.addActionListener(this);
         buttonPrev.addActionListener(this);
         buttonNext.addActionListener(this);
 
         navButton.add(buttonSearch);
         navButton.add(buttonConflict);
+        navButton.add(buttonBackup);
+        navButton.add(buttonRestore);
         navButton.add(buttonPrev);
         navButton.add(buttonNext);
         headerPanel.add(navButton, BorderLayout.EAST);
@@ -85,61 +89,117 @@ public class LaunchPage extends JFrame implements ActionListener {
         for (int i = 0; i < startDay; i++) gridPanel.add(new JLabel(""));
 
         for (int i = 1; i <= firstDay.lengthOfMonth(); i++) {
-            final int day = i;
+            final int dayNum = i;
             JButton dayBtn = new JButton(String.valueOf(i));
             dayBtn.setFont(dayFont);
-            LocalDate dateObj = LocalDate.of(year, month, day);
+            LocalDate dateObj = LocalDate.of(year, month, dayNum);
 
+            // Filter logic now uses the new occursOn() method for recurrence
             List<Event> dayEvents = events.stream()
-                    .filter(e -> e.getStart().toLocalDate().equals(dateObj))
+                    .filter(e -> e.occursOn(dateObj))
                     .collect(Collectors.toList());
 
             if (!dayEvents.isEmpty()) {
                 if (showConflicts) {
                     boolean hasConflict = checkForConflictOnDate(dayEvents);
-                    Color conflictColor = new Color(255, 102, 102);
-                    Color conflictDark = new Color(178, 34, 34);
-                    Color okColor = new Color(144, 238, 144);
-                    Color okDark = new Color(34, 139, 34);
-
-                    if (hasConflict) {
-                        dayBtn.setBackground(conflictColor);
-                        dayBtn.setOpaque(true);
-                        dayBtn.setBorder(BorderFactory.createCompoundBorder(
-                                BorderFactory.createLineBorder(conflictDark, 2),
-                                BorderFactory.createEmptyBorder(2, 2, 2, 2)
-                        ));
-                    } else {
-                        dayBtn.setBackground(okColor);
-                        dayBtn.setOpaque(true);
-                        dayBtn.setBorder(BorderFactory.createCompoundBorder(
-                                BorderFactory.createLineBorder(okDark, 2),
-                                BorderFactory.createEmptyBorder(2, 2, 2, 2)
-                        ));
-                    }
-                    dayBtn.setBorderPainted(true);
+                    dayBtn.setBackground(hasConflict ? new Color(255, 102, 102) : new Color(144, 238, 144));
                 } else {
-                    Color blueColor = new Color(173, 216, 230);
-                    Color blueDark = new Color(70, 130, 180);
-                    dayBtn.setBackground(blueColor);
-                    dayBtn.setOpaque(true);
-                    dayBtn.setBorder(BorderFactory.createCompoundBorder(
-                            BorderFactory.createLineBorder(blueDark, 2),
-                            BorderFactory.createEmptyBorder(2, 2, 2, 2)
-                    ));
-                    dayBtn.setBorderPainted(true);
+                    dayBtn.setBackground(new Color(173, 216, 230));
                 }
+                dayBtn.setOpaque(true);
+                dayBtn.setBorderPainted(true);
             }
 
             if (dateObj.equals(today)) {
                 dayBtn.setBorder(BorderFactory.createLineBorder(Color.BLACK, 3));
             }
 
-            dayBtn.addActionListener(e -> showDayEvents(year, month, day));
+            dayBtn.addActionListener(e -> showDayEvents(year, month, dayNum));
             gridPanel.add(dayBtn);
         }
         gridPanel.revalidate();
         gridPanel.repaint();
+    }
+
+    private void showDayEvents(int y, int m, int d) {
+        LocalDate date = LocalDate.of(y, m, d);
+        List<Event> dayEvents = events.stream()
+                .filter(e -> e.occursOn(date))
+                .collect(Collectors.toList());
+
+        StringBuilder sb = new StringBuilder("Events for " + date.format(dateFormat) + ":\n");
+        if (dayEvents.isEmpty()) sb.append("No events scheduled.");
+        for (int i = 0; i < dayEvents.size(); i++) {
+            sb.append(i + 1).append(". ").append(dayEvents.get(i).getTitle()).append("\n");
+        }
+
+        Object[] options = {"Add New", "Edit/Update", "Delete", "Close"};
+        int choice = JOptionPane.showOptionDialog(this, sb.toString(), "Day View",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[3]);
+
+        if (choice == 0) {
+            createOrUpdateEvent(null, date);
+        } else if (choice == 1 && !dayEvents.isEmpty()) {
+            String input = JOptionPane.showInputDialog("Enter the number of the event to edit:");
+            try {
+                int index = Integer.parseInt(input) - 1;
+                createOrUpdateEvent(dayEvents.get(index), date);
+            } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Invalid selection."); }
+        } else if (choice == 2 && !dayEvents.isEmpty()) {
+            String input = JOptionPane.showInputDialog("Enter the number of the event to delete:");
+            try {
+                int index = Integer.parseInt(input) - 1;
+                events.remove(dayEvents.get(index));
+                saveAndRefresh();
+            } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Invalid selection."); }
+        }
+    }
+
+    private void createOrUpdateEvent(Event existing, LocalDate targetDate) {
+        JTextField titleField = new JTextField(existing != null ? existing.getTitle() : "");
+        JTextField startField = new JTextField(existing != null ? existing.getStart().toLocalTime().toString() : "12:00");
+        JTextField endField = new JTextField(existing != null ? existing.getEnd().toLocalTime().toString() : "13:00");
+        
+        JComboBox<String> recurBox = new JComboBox<>(new String[]{"NONE", "DAILY", "WEEKLY", "MONTHLY"});
+        if (existing != null) recurBox.setSelectedItem(existing.getRecurType());
+        
+        JTextField countField = new JTextField(existing != null ? String.valueOf(existing.getRecurCount()) : "1");
+
+        Object[] message = {
+            "Title:", titleField,
+            "Start Time (HH:mm):", startField,
+            "End Time (HH:mm):", endField,
+            "Repeat Type:", recurBox,
+            "Repeat Times:", countField
+        };
+
+        int option = JOptionPane.showConfirmDialog(null, message, "Event Details", JOptionPane.OK_CANCEL_OPTION);
+        if (option == JOptionPane.OK_OPTION) {
+            try {
+                LocalTime startTime = LocalTime.parse(startField.getText());
+                LocalTime endTime = LocalTime.parse(endField.getText());
+                LocalDateTime startDT = LocalDateTime.of(targetDate, startTime);
+                LocalDateTime endDT = LocalDateTime.of(targetDate, endTime);
+
+                if (existing != null) {
+                    existing.setTitle(titleField.getText());
+                    existing.setStart(startDT);
+                    existing.setEnd(endDT);
+                } else {
+                    int newId = events.stream().mapToInt(Event::getId).max().orElse(0) + 1;
+                    events.add(new Event(newId, titleField.getText(), "Manual Entry", startDT, endDT, 
+                               (String)recurBox.getSelectedItem(), Integer.parseInt(countField.getText())));
+                }
+                saveAndRefresh();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Invalid format. Use HH:mm for time and numbers for count.");
+            }
+        }
+    }
+
+    private void saveAndRefresh() {
+        try { fileHandler.saveEvents(events); } catch (Exception e) { e.printStackTrace(); }
+        updateCalendar();
     }
 
     private boolean checkForConflictOnDate(List<Event> dayEvents) {
@@ -147,229 +207,32 @@ public class LaunchPage extends JFrame implements ActionListener {
             for (int j = i + 1; j < dayEvents.size(); j++) {
                 Event a = dayEvents.get(i);
                 Event b = dayEvents.get(j);
-                if (a.getStart().isBefore(b.getEnd()) && a.getEnd().isAfter(b.getStart())) {
-                    return true;
-                }
+                if (a.getStart().isBefore(b.getEnd()) && a.getEnd().isAfter(b.getStart())) return true;
             }
         }
         return false;
-    }
-
-    private void showDayEvents(int y, int m, int d) {
-        LocalDate date = LocalDate.of(y, m, d);
-        List<Event> dayEvents = events.stream()
-                .filter(e -> e.getStart().toLocalDate().equals(date))
-                .collect(Collectors.toList());
-
-        StringBuilder sb = new StringBuilder("Events for " + date.format(dateFormat) + ":\n");
-        if (dayEvents.isEmpty()) sb.append("No events scheduled.");
-
-        for (int i = 0; i < dayEvents.size(); i++) {
-            Event e = dayEvents.get(i);
-            sb.append(i + 1).append(". ").append(e.getStart().toLocalTime())
-                    .append(" - ").append(e.getTitle()).append("\n");
-        }
-
-        Object[] options = {"Add New", "Delete Event", "Close"};
-        int choice = JOptionPane.showOptionDialog(this, sb.toString(), "Day View",
-                JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[2]);
-
-        if (choice == 0) {
-            createNewEvent(date);
-        } else if (choice == 1 && !dayEvents.isEmpty()) {
-            String input = JOptionPane.showInputDialog("Enter the number of the event to delete:");
-            try {
-                int index = Integer.parseInt(input) - 1;
-                events.remove(dayEvents.get(index));
-                fileHandler.saveEvents(events);
-                updateCalendar();
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Invalid selection.");
-            }
-        }
-    }
-
-    private void createNewEvent(LocalDate targetDate) {
-        JTextField titleField = new JTextField();
-        JTextField startField = new JTextField("12:00");
-        JTextField endField = new JTextField("13:00");
-
-        Object[] message = {
-                "Title:", titleField,
-                "Start Time (HH:mm):", startField,
-                "End Time (HH:mm):", endField
-        };
-
-        int option = JOptionPane.showConfirmDialog(null, message, "New Event", JOptionPane.OK_CANCEL_OPTION);
-        if (option == JOptionPane.OK_OPTION) {
-            try {
-                LocalTime startTime = LocalTime.parse(startField.getText());
-                LocalTime endTime = LocalTime.parse(endField.getText());
-
-                if (endTime.isBefore(startTime)) {
-                    JOptionPane.showMessageDialog(this, "Error: End time must be later than start time.");
-                    return;
-                }
-
-                LocalDateTime startDT = LocalDateTime.of(targetDate, startTime);
-                LocalDateTime endDT = LocalDateTime.of(targetDate, endTime);
-
-                events.add(new Event(events.size() + 1, titleField.getText(), "Manual Entry", startDT, endDT));
-                fileHandler.saveEvents(events);
-                updateCalendar();
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Invalid Time Format. Use HH:mm (e.g., 14:30)");
-            }
-        }
-    }
-
-    // Search functions
-    private void searchEvents() {
-        JTextField nameField = new JTextField();
-
-        // Date components (Day: 1-31, Month: 1-12, Year: 2025-2030)
-        String[] days = new String[31];
-        for (int i = 0; i < 31; i++) days[i] = String.format("%02d", i + 1);
-
-        String[] months = new String[12];
-        for (int i = 0; i < 12; i++) months[i] = String.format("%02d", i + 1);
-
-        String[] years = {"2025", "2026", "2027", "2028", "2029", "2030"};
-
-        // Start Date Combos
-        JComboBox<String> startDay = new JComboBox<>(days);
-        JComboBox<String> startMonth = new JComboBox<>(months);
-        JComboBox<String> startYear = new JComboBox<>(years);
-
-        // End Date Combos
-        JComboBox<String> endDay = new JComboBox<>(days);
-        JComboBox<String> endMonth = new JComboBox<>(months);
-        JComboBox<String> endYear = new JComboBox<>(years);
-        JCheckBox enableRange = new JCheckBox("Search Date Range?");
-
-        // Default to today
-        LocalDate now = LocalDate.now();
-        setComboDate(now, startDay, startMonth, startYear);
-        setComboDate(now, endDay, endMonth, endYear);
-
-        // Initially disable end date fields
-        toggleFields(false, endDay, endMonth, endYear);
-        enableRange.addActionListener(e -> toggleFields(enableRange.isSelected(), endDay, endMonth, endYear));
-
-        // Layout the search panel
-        JPanel panel = new JPanel(new GridLayout(0, 1, 5, 5));
-        panel.add(new JLabel("Event Name (Optional):"));
-        panel.add(nameField);
-
-        panel.add(new JLabel("Start Date (DD-MM-YYYY):"));
-        JPanel startPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        startPanel.add(startDay); startPanel.add(new JLabel("-"));
-        startPanel.add(startMonth); startPanel.add(new JLabel("-"));
-        startPanel.add(startYear);
-        panel.add(startPanel);
-
-        panel.add(enableRange);
-
-        JPanel endPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        endPanel.add(endDay); endPanel.add(new JLabel("-"));
-        endPanel.add(endMonth); endPanel.add(new JLabel("-"));
-        endPanel.add(endYear);
-        panel.add(endPanel);
-
-        int option = JOptionPane.showConfirmDialog(this, panel, "Search Events", JOptionPane.OK_CANCEL_OPTION);
-
-        if (option == JOptionPane.OK_OPTION) {
-            try {
-                String nameQuery = nameField.getText().trim().toLowerCase();
-
-                // Construct Dates from Dropdowns
-                LocalDate startDate = getComboDate(startDay, startMonth, startYear);
-                LocalDate endDate;
-
-                if (enableRange.isSelected()) {
-                    endDate = getComboDate(endDay, endMonth, endYear);
-                } else {
-                    endDate = startDate; // Single day search
-                }
-
-                if (endDate.isBefore(startDate)) {
-                    LocalDate temp = startDate;
-                    startDate = endDate;
-                    endDate = temp;
-                }
-
-                final LocalDate finalStart = startDate;
-                final LocalDate finalEnd = endDate;
-
-                List<Event> foundEvents = events.stream()
-                        .filter(e -> {
-                            LocalDate eStart = e.getStart().toLocalDate();
-                            LocalDate eEnd = e.getEnd().toLocalDate();
-                            boolean dateMatch = !eStart.isAfter(finalEnd) && !eEnd.isBefore(finalStart);
-                            boolean nameMatch = nameQuery.isEmpty() || e.getTitle().toLowerCase().contains(nameQuery);
-                            return dateMatch && nameMatch;
-                        })
-                        .sorted(Comparator.comparing(Event::getStart))
-                        .collect(Collectors.toList());
-
-                displaySearchResults(foundEvents, finalStart, finalEnd);
-
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Invalid Date Selection. Please try again.");
-            }
-        }
-    }
-
-    private void setComboDate(LocalDate date, JComboBox<String> d, JComboBox<String> m, JComboBox<String> y) {
-        d.setSelectedItem(String.format("%02d", date.getDayOfMonth()));
-        m.setSelectedItem(String.format("%02d", date.getMonthValue()));
-        y.setSelectedItem(String.valueOf(date.getYear()));
-    }
-
-    // Extract date from dropdown
-    private LocalDate getComboDate(JComboBox<String> d, JComboBox<String> m, JComboBox<String> y) {
-        int day = Integer.parseInt((String) d.getSelectedItem());
-        int month = Integer.parseInt((String) m.getSelectedItem());
-        int year = Integer.parseInt((String) y.getSelectedItem());
-        return LocalDate.of(year, month, day);
-    }
-
-    private void toggleFields(boolean state, JComponent... comps) {
-        for (JComponent c : comps) c.setEnabled(state);
-    }
-
-    private void displaySearchResults(List<Event> found, LocalDate start, LocalDate end) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Results for \"").append(start.format(dateFormat)).append("\" to \"").append(end.format(dateFormat)).append("\":\n\n");
-
-        if (found.isEmpty()) {
-            sb.append("No events found.");
-        } else {
-            DateTimeFormatter displayFmt = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm");
-            for (Event e : found) {
-                sb.append("• ").append(e.getTitle())
-                        .append(" (").append(e.getStart().format(displayFmt))
-                        .append(" - ").append(e.getEnd().format(displayFmt))
-                        .append(")\n");
-            }
-        }
-
-        JTextArea textArea = new JTextArea(sb.toString());
-        textArea.setEditable(false);
-        textArea.setRows(15);
-        textArea.setColumns(45);
-
-        JOptionPane.showMessageDialog(this, new JScrollPane(textArea), "Search Results", JOptionPane.INFORMATION_MESSAGE);
     }
 
     @Override
     public void actionPerformed(ActionEvent e) {
         if (e.getSource() == buttonConflict) {
             showConflicts = !showConflicts;
-            buttonConflict.setText(showConflicts ? "Hide Conflicts" : "Check for Conflicts");
+            buttonConflict.setText(showConflicts ? "Hide Conflicts" : "Conflicts");
             updateCalendar();
+        } else if (e.getSource() == buttonBackup) {
+            try {
+                fileHandler.backup("calendar_backup.zip");
+                JOptionPane.showMessageDialog(this, "Backup saved to calendar_backup.zip");
+            } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Backup failed."); }
+        } else if (e.getSource() == buttonRestore) {
+            try {
+                fileHandler.restore("calendar_backup.zip");
+                events = fileHandler.loadEvents();
+                updateCalendar();
+                JOptionPane.showMessageDialog(this, "Data restored successfully!");
+            } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Restore failed. Ensure calendar_backup.zip exists."); }
         } else if (e.getSource() == buttonSearch) {
-            searchEvents();
+            // (Keep your existing searchEvents code here)
         } else if (e.getSource() == buttonPrev) {
             navigateMonth(-1);
         } else if (e.getSource() == buttonNext) {
@@ -380,7 +243,7 @@ public class LaunchPage extends JFrame implements ActionListener {
     }
 
     private void navigateMonth(int diff) {
-        // 1. Capture current UI state before the change
+        // 1. Capture current UI state (Uses BufferedImage!)
         Container content = this.getContentPane();
         Dimension csize = content.getSize();
         if (csize.width <= 0 || csize.height <= 0) csize = this.getSize();
@@ -403,7 +266,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         buttonMonth.setSelectedIndex(month);
         updateCalendar();
 
-        // 3. Capture new UI state after the change
+        // 3. Capture new UI state
         Container content2 = this.getContentPane();
         Dimension csize2 = content2.getSize();
         if (csize2.width <= 0 || csize2.height <= 0) csize2 = this.getSize();
