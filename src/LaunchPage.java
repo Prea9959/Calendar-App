@@ -12,6 +12,7 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     // UI Components
     JPanel headerPanel, contentPanel;
+    TransitionPanel bodyPanel;
     JComboBox<CalendarController.ViewMode> viewToggle;
     JComboBox<CalendarController.TimeScale> scaleToggle;
     JButton buttonPrev, buttonNext, buttonConflict, buttonSearch, buttonBackup, buttonRestore, buttonAdd;
@@ -23,16 +24,18 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     public LaunchPage() {
         this.controller = new CalendarController();
-
         this.setSize(1100, 800);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setTitle("Personal Calendar - Multi-View Edition");
 
         setupHeader();
 
+        bodyPanel = new TransitionPanel();
         contentPanel = new JPanel(new BorderLayout());
+        bodyPanel.add(new JScrollPane(contentPanel), BorderLayout.CENTER);
+
         this.add(headerPanel, BorderLayout.NORTH);
-        this.add(new JScrollPane(contentPanel), BorderLayout.CENTER);
+        this.add(bodyPanel, BorderLayout.CENTER); 
 
         refreshUI();
         this.setVisible(true);
@@ -65,7 +68,10 @@ public class LaunchPage extends JFrame implements ActionListener {
         buttonRestore = new JButton("Restore");
 
         JButton[] buttons = {buttonPrev, buttonNext, buttonAdd, buttonSearch, buttonConflict, buttonBackup, buttonRestore};
-        for (JButton b : buttons) b.addActionListener(this);
+        for (JButton b : buttons) {
+            b.setFocusable(false);
+            b.addActionListener(this);
+        }
 
         headerPanel.add(new JLabel("View:"));
         headerPanel.add(viewToggle);
@@ -117,6 +123,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         for (int i = 0; i < length; i++) {
             LocalDate date = start.plusDays(i);
             JButton dayBtn = createDayButton(date);
+            dayBtn.setFocusable(false);
             grid.add(dayBtn);
         }
         contentPanel.add(grid, BorderLayout.CENTER);
@@ -186,23 +193,13 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     // --- UI TRANSITIONS ---
     private void navigate(int direction) {
-        // 1. Capture Screen
-        Container content = this.getContentPane();
-        BufferedImage before = new BufferedImage(content.getWidth(), content.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        content.paint(before.getGraphics());
-
-        // 2. Logic Update (Controller)
-        controller.navigate(direction);
-        
-        // 3. UI Update
-        refreshUI();
-
-        // 4. Animate
-        BufferedImage after = new BufferedImage(content.getWidth(), content.getHeight(), BufferedImage.TYPE_INT_ARGB);
-        content.paint(after.getGraphics());
-        Animator.Direction animDir = (direction > 0) ? Animator.Direction.LEFT : Animator.Direction.RIGHT;
-        Animator.slideTransition(this, contentPanel, before, after, animDir, 300, () -> {});
-    }
+        // We pass the "Logic" as a Runnable (Lambda) to the panel
+        bodyPanel.animate(direction, () -> {
+            // This code runs in the middle of the snapshot process
+            controller.navigate(direction);
+            refreshUI();
+        });
+    }   
 
     // --- DIALOGS & USER INPUT ---
     private void showDayEvents(LocalDate date) {
@@ -252,9 +249,6 @@ public class LaunchPage extends JFrame implements ActionListener {
         } else {
             controller.setMode(CalendarController.ViewMode.LIST);
             viewToggle.setSelectedItem(CalendarController.ViewMode.LIST);
-            // Manually trigger a UI refresh with these specific results or simple refresh
-            // For simplicity, we just switch to list mode and refresh, 
-            // but ideally you'd have a specific "Search Mode" in the controller.
             refreshUI(); 
         }
     }
