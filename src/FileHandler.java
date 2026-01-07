@@ -6,7 +6,6 @@ import java.util.zip.*;
 public class FileHandler {
     private final String DATA_DIR = "data";
     private final String EVENT_FILE = "data/event.csv";
-    private final String RECUR_FILE = "data/recurrent.csv";
 
     public FileHandler() {
         new File(DATA_DIR).mkdirs();
@@ -14,7 +13,7 @@ public class FileHandler {
 
     public void saveEvents(List<Event> events) throws IOException {
         try (PrintWriter pw = new PrintWriter(new FileWriter(EVENT_FILE))) {
-            pw.println("eventId,title,description,startDateTime,endDateTime");
+            pw.println("eventId|title|description|start|end|recurType|recurCount");
             for (Event e : events) pw.println(e.toCSV());
         }
     }
@@ -24,9 +23,12 @@ public class FileHandler {
         File file = new File(EVENT_FILE);
         if (!file.exists()) return list;
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
-            br.readLine(); // skip header
+            br.readLine(); 
             String line;
-            while ((line = br.readLine()) != null) list.add(Event.fromCSV(line));
+            while ((line = br.readLine()) != null) {
+                Event e = Event.fromCSV(line);
+                if (e != null) list.add(e);
+            }
         }
         return list;
     }
@@ -34,7 +36,6 @@ public class FileHandler {
     public void backup(String dest) throws IOException {
         try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(dest))) {
             addToZip(EVENT_FILE, zos);
-            addToZip(RECUR_FILE, zos);
         }
     }
 
@@ -47,12 +48,12 @@ public class FileHandler {
     }
 
     public void restore(String zipPath) throws IOException {
-    try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipPath))) {
-        ZipEntry entry;
-        while ((entry = zis.getNextEntry()) != null) {
-            Path destPath = Paths.get(DATA_DIR, entry.getName());
-            Files.copy(zis, destPath, StandardCopyOption.REPLACE_EXISTING);
-            zis.closeEntry();
+        try (ZipInputStream zis = new ZipInputStream(new FileInputStream(zipPath))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path destPath = Paths.get(DATA_DIR, entry.getName());
+                Files.copy(zis, destPath, StandardCopyOption.REPLACE_EXISTING);
+                zis.closeEntry();
             }
         }
     }
