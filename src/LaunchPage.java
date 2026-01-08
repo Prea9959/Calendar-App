@@ -3,6 +3,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 public class LaunchPage extends JFrame implements ActionListener {
@@ -284,15 +285,63 @@ public class LaunchPage extends JFrame implements ActionListener {
     }
 
     private void handleSearch() {
-        String query = JOptionPane.showInputDialog(this, "Search event title:");
-        List<Event> results = controller.searchEvents(query);
+    String[] options = {"Search by Name", "Search by Date Range", "Cancel"};
+    int choice = JOptionPane.showOptionDialog(this, "Select Search Type", "Search", 
+                 0, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+
+    List<Event> results = new ArrayList<>();
+
+    if (choice == 0) { // By Name
+        String query = JOptionPane.showInputDialog(this, "Enter event title:");
+        if (query != null) results = controller.searchEvents(query);
         
+    } else if (choice == 1) { // By Date Range
+        JTextField startField = new JTextField(LocalDate.now().toString());
+        JTextField endField = new JTextField(LocalDate.now().plusMonths(1).toString());
+        Object[] message = {
+            "Start Date (YYYY-MM-DD):", startField,
+            "End Date (YYYY-MM-DD):", endField
+        };
+
+        int option = JOptionPane.showConfirmDialog(this, message, "Date Range Search", JOptionPane.OK_CANCEL_OPTION);
+        if (option == JOptionPane.OK_OPTION) {
+            try {
+                LocalDate start = LocalDate.parse(startField.getText());
+                LocalDate end = LocalDate.parse(endField.getText());
+                results = controller.searchEventsByDate(start, end);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Invalid date format. Use YYYY-MM-DD.");
+                return;
+            }
+        }
+    }
+
+    if (choice != 2) { // If not cancelled
+        displaySearchResults(results);
+    }
+        }
+
+    private void displaySearchResults(List<Event> results) {
         if (results.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No events found matching: " + query);
+            JOptionPane.showMessageDialog(this, "No events found.");
         } else {
+            // We temporarily hijack the List View logic to show results
             controller.setMode(CalendarController.ViewMode.LIST);
             viewToggle.setSelectedItem(CalendarController.ViewMode.LIST);
-            refreshUI(); 
+            
+            // Custom refresh to show ONLY search results
+            contentPanel.removeAll();
+            JPanel listPanel = new JPanel();
+            listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
+            
+            for (Event e : results) {
+                listPanel.add(createEventRow(e));
+                listPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+            }
+            
+            contentPanel.add(new JScrollPane(listPanel), BorderLayout.CENTER);
+            contentPanel.revalidate();
+            contentPanel.repaint();
         }
     }
 

@@ -149,4 +149,12 @@ public class CalendarController {
         fileHandler.restore(filename); // [cite: 25]
         events = fileHandler.loadEvents();
     }
+
+    // --- Advanced Search Logic ---
+    public List<Event> searchEventsByDate(LocalDate start, LocalDate end) {
+        return events.stream()
+                .filter(e -> occursInRange(e, start, end))
+                .sorted(Comparator.comparing(Event::getStart))
+                .collect(Collectors.toList());
+    }
 }
