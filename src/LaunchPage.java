@@ -203,19 +203,59 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     // --- DIALOGS & USER INPUT ---
     private void showDayEvents(LocalDate date) {
-        List<Event> dayEvents = controller.getEventsOnDate(date);
-        StringBuilder sb = new StringBuilder("Events for " + date.format(dateFormat) + ":\n");
-        for (int i = 0; i < dayEvents.size(); i++) sb.append(i + 1).append(". ").append(dayEvents.get(i).getTitle()).append("\n");
-        
-        Object[] options = {"Add New", "Edit", "Delete", "Close"};
-        int choice = JOptionPane.showOptionDialog(this, sb.toString(), "Day View", 0, 1, null, options, options[3]);
+    List<Event> dayEvents = controller.getEventsOnDate(date);
+    
+    if (dayEvents.isEmpty()) {
+        int choice = JOptionPane.showConfirmDialog(this, "No events. Add one?", "Day View", JOptionPane.YES_NO_OPTION);
+        if (choice == JOptionPane.YES_OPTION) createOrUpdateEvent(null, date);
+        return;
+    }
 
-        if (choice == 0) createOrUpdateEvent(null, date);
-        else if (choice == 1 && !dayEvents.isEmpty()) createOrUpdateEvent(dayEvents.get(0), date);
-        else if (choice == 2 && !dayEvents.isEmpty()) { 
-            controller.deleteEvent(dayEvents.get(0)); 
-            refreshUI(); 
+    // 1. Create a list of titles for the user to pick from
+    DefaultListModel<String> listModel = new DefaultListModel<>();
+    for (Event e : dayEvents) {
+        listModel.addElement(e.getStart().toLocalTime() + " - " + e.getTitle());
+    }
+    
+    JList<String> eventJList = new JList<>(listModel);
+    eventJList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+    eventJList.setSelectedIndex(0); // Default to first item
+
+    // 2. Wrap the list in a scroll pane in case there are many events
+    JScrollPane scrollPane = new JScrollPane(eventJList);
+    scrollPane.setPreferredSize(new Dimension(300, 150));
+
+    Object[] message = {
+        "Select an event:", scrollPane
+    };
+
+    Object[] options = {"Edit Selected", "Delete Selected", "Add New", "Close"};
+    
+    int choice = JOptionPane.showOptionDialog(
+        this, 
+        message, 
+        "Events for " + date.format(dateFormat),
+        JOptionPane.DEFAULT_OPTION, 
+        JOptionPane.PLAIN_MESSAGE, 
+        null, 
+        options, 
+        options[3]
+    );
+
+    // 3. Handle the selection logic
+    int selectedIdx = eventJList.getSelectedIndex();
+    
+    if (choice == 0 && selectedIdx != -1) { // Edit
+        createOrUpdateEvent(dayEvents.get(selectedIdx), date);
+    } else if (choice == 1 && selectedIdx != -1) { // Delete
+        int confirm = JOptionPane.showConfirmDialog(this, "Delete this event?");
+        if (confirm == JOptionPane.YES_OPTION) {
+            controller.deleteEvent(dayEvents.get(selectedIdx));
+            refreshUI();
         }
+    } else if (choice == 2) { // Add New
+        createOrUpdateEvent(null, date);
+    }
     }
 
     private void createOrUpdateEvent(Event existing, LocalDate targetDate) {

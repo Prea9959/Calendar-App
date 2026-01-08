@@ -50,54 +50,45 @@ public class FileHandler {
     }
 
     public List<Event> loadEvents() throws IOException {
-        List<Event> list = new ArrayList<>();
-        File eFile = new File(EVENT_FILE);
-        File rFile = new File(RECUR_FILE);
+    List<Event> list = new ArrayList<>();
+    File eFile = new File(EVENT_FILE);
+    File rFile = new File(RECUR_FILE);
 
-        if (!eFile.exists()) return list;
+    if (!eFile.exists()) return list;
 
-        // 1. Read Basic Events
-        try (BufferedReader br = new BufferedReader(new FileReader(eFile))) {
+    // 1. Read Basic Events
+    try (BufferedReader br = new BufferedReader(new FileReader(eFile))) {
+        String line;
+        while ((line = br.readLine()) != null) {
+            Event e = Event.fromCSV(line);
+            if (e != null) list.add(e);
+        }
+    }
+
+    // 2. Read Recurring Data and MERGE
+    if (rFile.exists()) {
+        try (BufferedReader br = new BufferedReader(new FileReader(rFile))) {
             String line;
             while ((line = br.readLine()) != null) {
-                if(line.trim().isEmpty()) continue;
-                
                 String[] parts = line.split(",");
-                // Basic error checking to skip bad lines
-                if(parts.length < 5) continue; 
-                
-                Event e = Event.fromCSV(line); // Ensure your Event class parses comma-separated
-                if (e != null) list.add(e);
-            }
-        }
-
-        // 2. Read Recurring Data and Merge
-        if (rFile.exists()) {
-            try (BufferedReader br = new BufferedReader(new FileReader(rFile))) {
-                String line;
-                while ((line = br.readLine()) != null) {
-                    if(line.trim().isEmpty()) continue;
-                    
-                    String[] parts = line.split(",");
-                    if(parts.length < 3) continue;
-
+                if (parts.length >= 3) {
                     int id = Integer.parseInt(parts[0]);
-                    String interval = parts[1];
+                    String interval = parts[1]; // e.g., "1d"
                     int count = Integer.parseInt(parts[2]);
 
-                    // Find the event in our list and update it
                     for (Event e : list) {
                         if (e.getId() == id) {
+                            // This is the critical link!
                             e.setRecurType(convertFromPdfFormat(interval));
                             e.setRecurCount(count);
-                            break;
                         }
                     }
                 }
             }
         }
-        return list;
     }
+    return list;
+}
 
     // --- ZIP BACKUP (Must include BOTH files) ---
     public void backup(String dest) throws IOException {

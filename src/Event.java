@@ -72,6 +72,7 @@ public class Event {
 
     // CSV Parsing Helper
     public static Event fromCSV(String csvLine) {
+    try {
         String[] parts = csvLine.split(",");
         int id = Integer.parseInt(parts[0]);
         String title = parts[1];
@@ -79,7 +80,9 @@ public class Event {
         LocalDateTime start = LocalDateTime.parse(parts[3]);
         LocalDateTime end = LocalDateTime.parse(parts[4]);
         
-        // Default to NONE if old CSV format
         return new Event(id, title, desc, start, end, "NONE", 0);
+    } catch (Exception e) {
+        return null; 
+    }
     }
 }

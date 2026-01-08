@@ -99,11 +99,19 @@ public class CalendarController {
     }
 
     private boolean occursInRange(Event e, LocalDate start, LocalDate end) {
-        for (int i = 0; i < e.getRecurCount(); i++) {
-            LocalDate occurrence = e.getOccurrence(i).toLocalDate();
-            if (!occurrence.isBefore(start) && !occurrence.isAfter(end)) return true;
+    // Check the original occurrence (index 0)
+    if (!e.getStart().toLocalDate().isBefore(start) && !e.getStart().toLocalDate().isAfter(end)) {
+        return true;
+    }
+    
+    // Check all future recurrences
+    for (int i = 1; i <= e.getRecurCount(); i++) {
+        LocalDate occurrence = e.getOccurrence(i).toLocalDate();
+        if (!occurrence.isBefore(start) && !occurrence.isAfter(end)) {
+            return true;
         }
-        return false;
+    }
+    return false;
     }
 
     // --- Search Logic [cite: 26] ---
