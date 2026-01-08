@@ -29,8 +29,8 @@ public class LaunchPage extends JFrame implements ActionListener {
     boolean showConflicts = false;
 
     // Design
-    Font dayFont = new Font("Arial", Font.BOLD, 18);
-    Font labelFont = new Font("Arial", Font.BOLD, 14);
+    Font dayFont = new Font("Arial", Font.BOLD, 24);
+    Font labelFont = new Font("Arial", Font.BOLD, 18);
     // FIX: Using the dateFormat variable for window titles and logs
     private final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
