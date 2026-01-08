@@ -7,13 +7,12 @@ public class Event {
     private String description;
     private LocalDateTime start;
     private LocalDateTime end;
-    private String recurType; 
-    private int recurCount;   
+    
+    // NEW FIELDS
+    private String recurType; // "NONE", "DAILY", "WEEKLY", "MONTHLY"
+    private int recurCount;   // How many times it repeats
 
-    public static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
-    private static final String DELIM = "\\|"; // Regex for splitting
-    private static final String JOINER = "|";  // For writing
-
+    // Constructor
     public Event(int id, String title, String description, LocalDateTime start, LocalDateTime end, String recurType, int recurCount) {
         this.id = id;
         this.title = title;
@@ -24,29 +23,40 @@ public class Event {
         this.recurCount = recurCount;
     }
 
-    public String toCSV() {
-        return id + JOINER + title + JOINER + description + JOINER + 
-               start.format(FMT) + JOINER + end.format(FMT) + JOINER + 
-               recurType + JOINER + recurCount;
+    // Simplified Constructor (for non-recurring events)
+    public Event(int id, String title, String description, LocalDateTime start, LocalDateTime end) {
+        this(id, title, description, start, end, "NONE", 0);
     }
 
-    public static Event fromCSV(String line) {
-        try {
-            String[] p = line.split(DELIM);
-            if (p.length < 7) return null;
-            return new Event(
-                Integer.parseInt(p[0]), p[1], p[2], 
-                LocalDateTime.parse(p[3], FMT), LocalDateTime.parse(p[4], FMT),
-                p[5], Integer.parseInt(p[6])
-            );
-        } catch (Exception e) {
-            return null;
-        }
-    }
+    // --- GETTERS ---
+    public int getId() { return id; }
+    public String getTitle() { return title; }
+    public String getDescription() { return description; }
+    public LocalDateTime getStart() { return start; }
+    public LocalDateTime getEnd() { return end; }
+    public String getRecurType() { return recurType; }
+    public int getRecurCount() { return recurCount; }
 
+    // --- SETTERS (Required to fix "Method is undefined") ---
+    public void setTitle(String title) { this.title = title; }
+    public void setStart(LocalDateTime start) { this.start = start; }
+    public void setEnd(LocalDateTime end) { this.end = end; }
+    
+    // These are the specific ones you were missing:
+    public void setRecurType(String recurType) { this.recurType = recurType; }
+    public void setRecurCount(int recurCount) { this.recurCount = recurCount; }
+
+    // --- LOGIC ---
     public boolean occursOn(java.time.LocalDate date) {
-        for (int i = 0; i < recurCount; i++) {
-            if (getOccurrence(i).toLocalDate().equals(date)) return true;
+        // Check original date
+        if (start.toLocalDate().equals(date)) return true;
+        
+        // Check recurrences
+        if (!"NONE".equalsIgnoreCase(recurType)) {
+            for (int i = 1; i <= recurCount; i++) {
+                LocalDateTime next = getOccurrence(i);
+                if (next.toLocalDate().equals(date)) return true;
+            }
         }
         return false;
     }
@@ -60,13 +70,16 @@ public class Event {
         }
     }
 
-    public int getId() { return id; }
-    public String getTitle() { return title; }
-    public LocalDateTime getStart() { return start; }
-    public LocalDateTime getEnd() { return end; }
-    public String getRecurType() { return recurType; }
-    public int getRecurCount() { return recurCount; }
-    public void setTitle(String t) { this.title = t; }
-    public void setStart(LocalDateTime s) { this.start = s; }
-    public void setEnd(LocalDateTime e) { this.end = e; }
+    // CSV Parsing Helper
+    public static Event fromCSV(String csvLine) {
+        String[] parts = csvLine.split(",");
+        int id = Integer.parseInt(parts[0]);
+        String title = parts[1];
+        String desc = parts[2];
+        LocalDateTime start = LocalDateTime.parse(parts[3]);
+        LocalDateTime end = LocalDateTime.parse(parts[4]);
+        
+        // Default to NONE if old CSV format
+        return new Event(id, title, desc, start, end, "NONE", 0);
+    }
 }
