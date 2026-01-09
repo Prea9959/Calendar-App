@@ -15,7 +15,6 @@ public class CalendarController {
     
     private List<Event> events = new ArrayList<>();
     private FileHandler fileHandler = new FileHandler();
-    private boolean showConflicts = false;
 
     public CalendarController() {
         try {
@@ -33,9 +32,6 @@ public class CalendarController {
     public void setScale(TimeScale scale) { this.currentScale = scale; }
     
     public LocalDate getReferenceDate() { return referenceDate; }
-    
-    public boolean isShowConflicts() { return showConflicts; }
-    public void toggleConflicts() { this.showConflicts = !showConflicts; }
 
     // --- Date Navigation Logic ---
     public void navigate(int direction) {
