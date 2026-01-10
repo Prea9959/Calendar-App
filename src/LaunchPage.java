@@ -63,8 +63,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         scaleToggle.setSelectedItem(CalendarController.TimeScale.MONTH);
 
         // Month and Year Selectors
-        String[] months = {"January", "February", "March", "April", "May", "June", 
-                          "July", "August", "September", "October", "November", "December"};
+        String[] months = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
         monthSelector = new JComboBox<>(months);
         
         // Generate years (current year ± 10 years)
@@ -192,9 +191,13 @@ public class LaunchPage extends JFrame implements ActionListener {
         String dateString = controller.getReferenceDate().format(dateFormat);
         this.setTitle("Calendar - " + dateString + " (" + controller.getMode() + ")");
 
-        if (controller.getMode() == CalendarController.ViewMode.CALENDAR) {
+        if (controller.getScale() == CalendarController.TimeScale.DAY) {
+            renderDayView(); // <--- Call the new method here
+        } 
+        else if (controller.getMode() == CalendarController.ViewMode.CALENDAR) {
             renderCalendarView();
-        } else {
+        } 
+        else {
             renderListView();
         }
 
@@ -214,7 +217,7 @@ public class LaunchPage extends JFrame implements ActionListener {
 
         LocalDate start = controller.getStartOfRange();
         int length = (controller.getScale() == CalendarController.TimeScale.MONTH) ? 
-                      controller.getReferenceDate().lengthOfMonth() : 7;
+        controller.getReferenceDate().lengthOfMonth() : 7;
         
         if (controller.getScale() == CalendarController.TimeScale.MONTH) {
             int startPadding = controller.getReferenceDate().withDayOfMonth(1).getDayOfWeek().getValue() % 7;
@@ -228,6 +231,82 @@ public class LaunchPage extends JFrame implements ActionListener {
             grid.add(dayBtn);
         }
         contentPanel.add(grid, BorderLayout.CENTER);
+    }
+
+    private void renderDayView() {
+        // 1. Setup the container
+        // We use null layout so we can place buttons at exact pixel coordinates
+        JPanel timeLinePanel = new JPanel(null); 
+        timeLinePanel.setBackground(Color.WHITE);
+        
+        // Calculate total height: 24 hours * 60 pixels per hour = 1440 pixels tall
+        int rowHeight = 60;
+        int totalHeight = 24 * rowHeight;
+        timeLinePanel.setPreferredSize(new Dimension(contentPanel.getWidth() - 20, totalHeight));
+
+        // 2. Draw Time Labels (The Background Grid)
+        for (int hour = 0; hour < 24; hour++) {
+            // Label (e.g., "09:00")
+            JLabel timeLabel = new JLabel(String.format("%02d:00", hour));
+            timeLabel.setBounds(10, hour * rowHeight, 50, 20); // x, y, width, height
+            timeLabel.setForeground(Color.GRAY);
+            timeLinePanel.add(timeLabel);
+
+            // Horizontal Line
+            JPanel line = new JPanel();
+            line.setBackground(new Color(230, 230, 230));
+            line.setBounds(60, hour * rowHeight, 2000, 1); // Stretch across
+            timeLinePanel.add(line);
+        }
+
+        // 3. Place Events
+        // Ask controller for today's events
+        List<Event> daysEvents = controller.getEventsOnDate(controller.getReferenceDate());
+
+        for (Event e : daysEvents) {
+            // Calculate Top Position (Start Time)
+            int startHour = e.getStart().getHour();
+            int startMin = e.getStart().getMinute();
+            int y = (startHour * rowHeight) + startMin; // 1 min = 1 pixel
+
+            // Calculate Height (Duration)
+            int endHour = e.getEnd().getHour();
+            int endMin = e.getEnd().getMinute();
+            // Handle case where event wraps to next day (cap at midnight for viewing)
+            if (e.getEnd().toLocalDate().isAfter(e.getStart().toLocalDate())) {
+                endHour = 24; endMin = 0;
+            }
+            
+            int startTotalMins = (startHour * 60) + startMin;
+            int endTotalMins = (endHour * 60) + endMin;
+            int durationMins = endTotalMins - startTotalMins;
+            
+            // Minimum height of 20px so user can see short events
+            int height = Math.max(20, durationMins);
+
+            // Create the Event "Block"
+            JButton eventBlock = new JButton("<html>" + e.getTitle() + "</html>");
+            eventBlock.setFont(new Font("Arial", Font.PLAIN, 10));
+            eventBlock.setBackground(new Color(173, 216, 230)); // Light Blue
+            eventBlock.setBorder(BorderFactory.createLineBorder(Color.BLUE));
+            eventBlock.setVerticalAlignment(SwingConstants.TOP);
+            eventBlock.setHorizontalAlignment(SwingConstants.LEFT);
+
+            // Set Position: x=70 (after time labels), width=200 (or dynamic)
+            eventBlock.setBounds(70, y, 200, height);
+            
+            // Add click listener to edit
+            eventBlock.addActionListener(evt -> createOrUpdateEvent(e, controller.getReferenceDate()));
+
+            timeLinePanel.add(eventBlock);
+        }
+
+        // 4. Add to the main ScrollPane
+        contentPanel.add(timeLinePanel, BorderLayout.CENTER);
+        SwingUtilities.invokeLater(() -> {
+            JScrollPane scrollPane = (JScrollPane) bodyPanel.getComponent(0); // Access the scroll pane
+            scrollPane.getVerticalScrollBar().setValue(480); 
+        });
     }
 
     private JButton createDayButton(LocalDate date) {
@@ -378,8 +457,7 @@ public class LaunchPage extends JFrame implements ActionListener {
                 String recurType = (String)recurBox.getSelectedItem();
                 int count = Integer.parseInt(countField.getText());
                 
-                Event newEvent = new Event(id, titleField.getText(), descField.getText(), 
-                                          startDT, endDT, recurType, count);
+                Event newEvent = new Event(id, titleField.getText(), descField.getText(), startDT, endDT, recurType, count);
                 
                 controller.addOrUpdateEvent(newEvent);
                 refreshUI();
@@ -434,8 +512,8 @@ public class LaunchPage extends JFrame implements ActionListener {
             StringBuilder sb = new StringBuilder("Found " + results.size() + " event(s):\n\n");
             for (Event e : results) {
                 sb.append("• ").append(e.getStart().toLocalDate()).append(" ")
-                  .append(e.getStart().toLocalTime()).append(" - ")
-                  .append(e.getTitle());
+                .append(e.getStart().toLocalTime()).append(" - ")
+                .append(e.getTitle());
                 if (!"NONE".equals(e.getRecurType())) {
                     sb.append(" [").append(e.getRecurType()).append("]");
                 }
@@ -479,8 +557,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         List<Event> upcoming = controller.getUpcomingEvents(24); // Next 24 hours
         
         if (upcoming.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No upcoming events in the next 24 hours.", 
-                                        "Notifications", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "No upcoming events in the next 24 hours.", "Notifications", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         
@@ -494,7 +571,7 @@ public class LaunchPage extends JFrame implements ActionListener {
             
             sb.append("• ").append(e.getTitle()).append("\n");
             sb.append("  Time: ").append(e.getStart().toLocalDate()).append(" ")
-              .append(e.getStart().toLocalTime()).append("\n");
+            .append(e.getStart().toLocalTime()).append("\n");
             sb.append("  In: ").append(hoursUntil).append("h ").append(minutesUntil).append("m\n\n");
         }
         

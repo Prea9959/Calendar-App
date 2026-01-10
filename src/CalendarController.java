@@ -122,7 +122,7 @@ public class CalendarController {
         if (query == null || query.trim().isEmpty()) return new ArrayList<>();
         return events.stream()
                 .filter(ev -> ev.getTitle().toLowerCase().contains(query.toLowerCase()) ||
-                             ev.getDescription().toLowerCase().contains(query.toLowerCase()))
+                ev.getDescription().toLowerCase().contains(query.toLowerCase()))
                 .collect(Collectors.toList());
     }
 
@@ -214,7 +214,7 @@ public class CalendarController {
                 sb.append("\n");
                 for (Event e : dayEvents) {
                     sb.append("  • ").append(e.getStart().toLocalTime())
-                      .append(" - ").append(e.getTitle());
+                    .append(" - ").append(e.getTitle());
                     if (!"NONE".equals(e.getRecurType())) {
                         sb.append(" [").append(e.getRecurType()).append("]");
                     }
