@@ -43,14 +43,18 @@ public class LaunchPage extends JFrame implements ActionListener {
     }
 
     private void setupHeader() {
-        headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(new Color(240, 240, 240));
+
+        JPanel leftContainer = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        JPanel rightContainer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        leftContainer.setOpaque(false);
+        rightContainer.setOpaque(false);
 
         viewToggle = new JComboBox<>(CalendarController.ViewMode.values());
         scaleToggle = new JComboBox<>(CalendarController.TimeScale.values());
         scaleToggle.setSelectedItem(CalendarController.TimeScale.MONTH);
 
-        // Update Controller State on Change
         viewToggle.addActionListener(e -> { 
             controller.setMode((CalendarController.ViewMode)viewToggle.getSelectedItem()); 
             refreshUI(); 
@@ -62,27 +66,63 @@ public class LaunchPage extends JFrame implements ActionListener {
 
         buttonPrev = new JButton("<");
         buttonNext = new JButton(">");
-        buttonAdd = new JButton("+ Event");
-        buttonSearch = new JButton("Search");
-        buttonBackup = new JButton("Backup");
-        buttonRestore = new JButton("Restore");
+        buttonPrev.setFocusable(false);
+        buttonNext.setFocusable(false);
+        buttonPrev.addActionListener(this);
+        buttonNext.addActionListener(this);
 
-        JButton[] buttons = {buttonPrev, buttonNext, buttonAdd, buttonSearch, buttonBackup, buttonRestore};
-        for (JButton b : buttons) {
-            b.setFocusable(false);
-            b.addActionListener(this);
-        }
+        JButton menuButton = new JButton("Actions \u25BC"); // \u25BC is the down arrow
+        menuButton.setFocusable(false);
 
-        headerPanel.add(new JLabel("View:"));
-        headerPanel.add(viewToggle);
-        headerPanel.add(scaleToggle);
-        headerPanel.add(new JSeparator(SwingConstants.VERTICAL));
-        headerPanel.add(buttonPrev);
-        headerPanel.add(buttonNext);
-        headerPanel.add(buttonAdd);
-        headerPanel.add(buttonSearch);
-        headerPanel.add(buttonBackup);
-        headerPanel.add(buttonRestore);
+        JPopupMenu popupMenu = new JPopupMenu();
+
+        JMenuItem itemAdd = new JMenuItem("+ Add Event");
+        JMenuItem itemSearch = new JMenuItem("Search");
+        JMenuItem itemBackup = new JMenuItem("Backup");
+        JMenuItem itemRestore = new JMenuItem("Restore");
+
+        itemAdd.addActionListener(e -> createOrUpdateEvent(null, controller.getReferenceDate()));
+        
+        itemSearch.addActionListener(e -> handleSearch());
+        
+        itemBackup.addActionListener(e -> {
+            try {
+                controller.performBackup("calendar_backup.zip");
+                JOptionPane.showMessageDialog(this, "Backup Successful!");
+            } catch (Exception ex) { ex.printStackTrace(); }
+        });
+        
+        itemRestore.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(this, "Overwrite current events?", "Confirm Restore", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                try {
+                    controller.performRestore("calendar_backup.zip");
+                    refreshUI();
+                    JOptionPane.showMessageDialog(this, "Restore complete!");
+                } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Restore failed."); }
+            }
+        });
+
+        popupMenu.add(itemAdd);
+        popupMenu.add(itemSearch);
+        popupMenu.addSeparator(); // Adds a separator line
+        popupMenu.add(itemBackup);
+        popupMenu.add(itemRestore);
+
+        menuButton.addActionListener(e -> popupMenu.show(menuButton, 0, menuButton.getHeight()));
+
+        // Add Left items to the Left Container
+        leftContainer.add(new JLabel("View:"));
+        leftContainer.add(viewToggle);
+        leftContainer.add(scaleToggle);
+
+        // Add Right items to the Right Container
+        rightContainer.add(buttonPrev);
+        rightContainer.add(buttonNext);
+        rightContainer.add(menuButton); 
+
+        headerPanel.add(leftContainer, BorderLayout.WEST);
+        headerPanel.add(rightContainer, BorderLayout.EAST);
     }
 
     private void refreshUI() {
