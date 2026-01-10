@@ -1,10 +1,12 @@
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.io.File;
 
 public class LaunchPage extends JFrame implements ActionListener {
     
@@ -15,12 +17,12 @@ public class LaunchPage extends JFrame implements ActionListener {
     TransitionPanel bodyPanel;
     JComboBox<CalendarController.ViewMode> viewToggle;
     JComboBox<CalendarController.TimeScale> scaleToggle;
-    JButton buttonPrev, buttonNext, buttonSearch, buttonBackup, buttonRestore, buttonAdd;
+    JComboBox<String> monthSelector, yearSelector;
+    JButton buttonPrev, buttonNext;
 
     // Design
     Font dayFont = new Font("Arial", Font.BOLD, 24);
     Font labelFont = new Font("Arial", Font.BOLD, 18);
-    // FIX: Using the dateFormat variable for window titles and logs
     private final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
     public LaunchPage() {
@@ -39,6 +41,10 @@ public class LaunchPage extends JFrame implements ActionListener {
         this.add(bodyPanel, BorderLayout.CENTER); 
 
         refreshUI();
+        
+        // Show notifications on startup
+        showUpcomingNotifications();
+        
         this.setVisible(true);
     }
 
@@ -51,9 +57,28 @@ public class LaunchPage extends JFrame implements ActionListener {
         leftContainer.setOpaque(false);
         rightContainer.setOpaque(false);
 
+        // Left side: View toggles and Month/Year selectors
         viewToggle = new JComboBox<>(CalendarController.ViewMode.values());
         scaleToggle = new JComboBox<>(CalendarController.TimeScale.values());
         scaleToggle.setSelectedItem(CalendarController.TimeScale.MONTH);
+
+        // Month and Year Selectors
+        String[] months = {"January", "February", "March", "April", "May", "June", 
+                          "July", "August", "September", "October", "November", "December"};
+        monthSelector = new JComboBox<>(months);
+        
+        // Generate years (current year ± 10 years)
+        int currentYear = LocalDate.now().getYear();
+        String[] years = new String[21];
+        for (int i = 0; i < 21; i++) {
+            years[i] = String.valueOf(currentYear - 10 + i);
+        }
+        yearSelector = new JComboBox<>(years);
+        
+        // Set to current month and year
+        LocalDate today = LocalDate.now();
+        monthSelector.setSelectedIndex(today.getMonthValue() - 1);
+        yearSelector.setSelectedItem(String.valueOf(today.getYear()));
 
         viewToggle.addActionListener(e -> { 
             controller.setMode((CalendarController.ViewMode)viewToggle.getSelectedItem()); 
@@ -63,7 +88,29 @@ public class LaunchPage extends JFrame implements ActionListener {
             controller.setScale((CalendarController.TimeScale)scaleToggle.getSelectedItem()); 
             refreshUI(); 
         });
+        
+        // When month/year selector changes, update the controller's reference date
+        monthSelector.addActionListener(e -> {
+            if (monthSelector.getSelectedIndex() >= 0) {
+                updateReferenceDate();
+            }
+        });
+        yearSelector.addActionListener(e -> {
+            if (yearSelector.getSelectedItem() != null) {
+                updateReferenceDate();
+            }
+        });
 
+        // Add to left container
+        leftContainer.add(new JLabel("View:"));
+        leftContainer.add(viewToggle);
+        leftContainer.add(scaleToggle);
+        leftContainer.add(new JSeparator(SwingConstants.VERTICAL));
+        leftContainer.add(new JLabel("Date:"));
+        leftContainer.add(monthSelector);
+        leftContainer.add(yearSelector);
+
+        // Right side: Navigation and Actions menu
         buttonPrev = new JButton("<");
         buttonNext = new JButton(">");
         buttonPrev.setFocusable(false);
@@ -71,58 +118,72 @@ public class LaunchPage extends JFrame implements ActionListener {
         buttonPrev.addActionListener(this);
         buttonNext.addActionListener(this);
 
-        JButton menuButton = new JButton("Actions \u25BC"); // \u25BC is the down arrow
-        menuButton.setFocusable(false);
+        JButton actionsButton = new JButton("Actions ▼");
+        actionsButton.setFocusable(false);
 
-        JPopupMenu popupMenu = new JPopupMenu();
+        JPopupMenu actionsMenu = new JPopupMenu();
 
         JMenuItem itemAdd = new JMenuItem("+ Add Event");
-        JMenuItem itemSearch = new JMenuItem("Search");
-        JMenuItem itemBackup = new JMenuItem("Backup");
-        JMenuItem itemRestore = new JMenuItem("Restore");
+        JMenuItem itemSearch = new JMenuItem("🔍 Search Events");
+        JMenuItem itemWeekList = new JMenuItem("📋 Week List View");
+        JMenuItem itemNotifications = new JMenuItem("🔔 View Notifications");
+        JMenuItem itemBackup = new JMenuItem("💾 Backup Data");
+        JMenuItem itemRestore = new JMenuItem("📥 Restore Data");
 
         itemAdd.addActionListener(e -> createOrUpdateEvent(null, controller.getReferenceDate()));
-        
         itemSearch.addActionListener(e -> handleSearch());
-        
-        itemBackup.addActionListener(e -> {
-            try {
-                controller.performBackup("calendar_backup.zip");
-                JOptionPane.showMessageDialog(this, "Backup Successful!");
-            } catch (Exception ex) { ex.printStackTrace(); }
-        });
-        
-        itemRestore.addActionListener(e -> {
-            int confirm = JOptionPane.showConfirmDialog(this, "Overwrite current events?", "Confirm Restore", JOptionPane.YES_NO_OPTION);
-            if (confirm == JOptionPane.YES_OPTION) {
-                try {
-                    controller.performRestore("calendar_backup.zip");
-                    refreshUI();
-                    JOptionPane.showMessageDialog(this, "Restore complete!");
-                } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Restore failed."); }
-            }
-        });
+        itemWeekList.addActionListener(e -> showWeekListView());
+        itemNotifications.addActionListener(e -> showUpcomingNotifications());
+        itemBackup.addActionListener(e -> handleBackup());
+        itemRestore.addActionListener(e -> handleRestore());
 
-        popupMenu.add(itemAdd);
-        popupMenu.add(itemSearch);
-        popupMenu.addSeparator(); // Adds a separator line
-        popupMenu.add(itemBackup);
-        popupMenu.add(itemRestore);
+        actionsMenu.add(itemAdd);
+        actionsMenu.addSeparator();
+        actionsMenu.add(itemSearch);
+        actionsMenu.add(itemWeekList);
+        actionsMenu.add(itemNotifications);
+        actionsMenu.addSeparator();
+        actionsMenu.add(itemBackup);
+        actionsMenu.add(itemRestore);
 
-        menuButton.addActionListener(e -> popupMenu.show(menuButton, 0, menuButton.getHeight()));
+        actionsButton.addActionListener(e -> actionsMenu.show(actionsButton, 0, actionsButton.getHeight()));
 
-        // Add Left items to the Left Container
-        leftContainer.add(new JLabel("View:"));
-        leftContainer.add(viewToggle);
-        leftContainer.add(scaleToggle);
-
-        // Add Right items to the Right Container
+        // Add to right container
         rightContainer.add(buttonPrev);
         rightContainer.add(buttonNext);
-        rightContainer.add(menuButton); 
+        rightContainer.add(actionsButton);
 
         headerPanel.add(leftContainer, BorderLayout.WEST);
         headerPanel.add(rightContainer, BorderLayout.EAST);
+    }
+    
+    // Helper method to update reference date when month/year selector changes
+    private void updateReferenceDate() {
+        int month = monthSelector.getSelectedIndex() + 1;
+        int year = Integer.parseInt((String) yearSelector.getSelectedItem());
+        LocalDate newDate = LocalDate.of(year, month, 1);
+        controller.setReferenceDate(newDate);
+        refreshUI();
+    }
+    
+    // Helper method to sync selectors with current reference date
+    private void syncSelectors() {
+        LocalDate refDate = controller.getReferenceDate();
+        
+        // Temporarily remove listeners to avoid triggering events
+        ActionListener[] monthListeners = monthSelector.getActionListeners();
+        ActionListener[] yearListeners = yearSelector.getActionListeners();
+        
+        for (ActionListener al : monthListeners) monthSelector.removeActionListener(al);
+        for (ActionListener al : yearListeners) yearSelector.removeActionListener(al);
+        
+        // Update selections
+        monthSelector.setSelectedIndex(refDate.getMonthValue() - 1);
+        yearSelector.setSelectedItem(String.valueOf(refDate.getYear()));
+        
+        // Re-add listeners
+        for (ActionListener al : monthListeners) monthSelector.addActionListener(al);
+        for (ActionListener al : yearListeners) yearSelector.addActionListener(al);
     }
 
     private void refreshUI() {
@@ -152,7 +213,8 @@ public class LaunchPage extends JFrame implements ActionListener {
         }
 
         LocalDate start = controller.getStartOfRange();
-        int length = (controller.getScale() == CalendarController.TimeScale.MONTH) ? controller.getReferenceDate().lengthOfMonth() : 7;
+        int length = (controller.getScale() == CalendarController.TimeScale.MONTH) ? 
+                      controller.getReferenceDate().lengthOfMonth() : 7;
         
         if (controller.getScale() == CalendarController.TimeScale.MONTH) {
             int startPadding = controller.getReferenceDate().withDayOfMonth(1).getDayOfWeek().getValue() % 7;
@@ -181,7 +243,6 @@ public class LaunchPage extends JFrame implements ActionListener {
         
         if (date.equals(LocalDate.now())) btn.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
         
-        // Ask Controller about conflicts
         if (!dayEvents.isEmpty()) {
             boolean conflict = controller.checkForConflictOnDate(dayEvents);
             btn.setBackground(conflict ? new Color(255, 180, 180) : new Color(200, 230, 255));
@@ -196,7 +257,6 @@ public class LaunchPage extends JFrame implements ActionListener {
         JPanel listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
         
-        // Ask Controller for filtered list
         List<Event> filtered = controller.getEventsInRange();
 
         if (filtered.isEmpty()) {
@@ -216,7 +276,8 @@ public class LaunchPage extends JFrame implements ActionListener {
         row.setBorder(BorderFactory.createEtchedBorder());
         
         String timeInfo = e.getStart().toLocalTime() + " - " + e.getEnd().toLocalTime();
-        JLabel title = new JLabel("<html><b>" + e.getTitle() + "</b> (" + timeInfo + ")<br>" + e.getRecurType() + "</html>");
+        String recurInfo = !"NONE".equals(e.getRecurType()) ? " [" + e.getRecurType() + "]" : "";
+        JLabel title = new JLabel("<html><b>" + e.getTitle() + "</b> (" + timeInfo + ")" + recurInfo + "</html>");
         title.setBorder(BorderFactory.createEmptyBorder(5,10,5,10));
         
         if (controller.hasConflict(e)) {
@@ -234,13 +295,12 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     // --- UI TRANSITIONS ---
     private void navigate(int direction) {
-        // We pass the "Logic" as a Runnable (Lambda) to the panel
         bodyPanel.animate(direction, () -> {
-            // This code runs in the middle of the snapshot process
             controller.navigate(direction);
+            syncSelectors(); // Update selectors after navigation
             refreshUI();
         });
-    }   
+    }
 
     // --- DIALOGS & USER INPUT ---
     private void showDayEvents(LocalDate date) {
@@ -252,90 +312,96 @@ public class LaunchPage extends JFrame implements ActionListener {
             return;
         }
 
-        // 1. Create a list of titles for the user to pick from
         DefaultListModel<String> listModel = new DefaultListModel<>();
         for (Event e : dayEvents) {
-            listModel.addElement(e.getStart().toLocalTime() + " - " + e.getTitle());
+            String recurMark = !"NONE".equals(e.getRecurType()) ? " [R]" : "";
+            listModel.addElement(e.getStart().toLocalTime() + " - " + e.getTitle() + recurMark);
         }
         
         JList<String> eventJList = new JList<>(listModel);
         eventJList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        eventJList.setSelectedIndex(0); // Default to first item
+        eventJList.setSelectedIndex(0);
 
-        // 2. Wrap the list in a scroll pane in case there are many events
         JScrollPane scrollPane = new JScrollPane(eventJList);
-        scrollPane.setPreferredSize(new Dimension(300, 150));
+        scrollPane.setPreferredSize(new Dimension(350, 150));
 
-        Object[] message = {
-            "Select an event:", scrollPane
-        };
-
+        Object[] message = {"Select an event:", scrollPane};
         Object[] options = {"Edit Selected", "Delete Selected", "Add New", "Close"};
         
-        int choice = JOptionPane.showOptionDialog(
-            this, 
-            message, 
-            "Events for " + date.format(dateFormat),
-            JOptionPane.DEFAULT_OPTION, 
-            JOptionPane.PLAIN_MESSAGE, 
-            null, 
-            options, 
-            options[3]
-        );
+        int choice = JOptionPane.showOptionDialog(this, message, "Events for " + date.format(dateFormat),
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[3]);
 
-        // 3. Handle the selection logic
         int selectedIdx = eventJList.getSelectedIndex();
         
-        if (choice == 0 && selectedIdx != -1) { // Edit
+        if (choice == 0 && selectedIdx != -1) {
             createOrUpdateEvent(dayEvents.get(selectedIdx), date);
-        } else if (choice == 1 && selectedIdx != -1) { // Delete
+        } else if (choice == 1 && selectedIdx != -1) {
             int confirm = JOptionPane.showConfirmDialog(this, "Delete this event?");
             if (confirm == JOptionPane.YES_OPTION) {
                 controller.deleteEvent(dayEvents.get(selectedIdx));
                 refreshUI();
             }
-        } else if (choice == 2) { // Add New
+        } else if (choice == 2) {
             createOrUpdateEvent(null, date);
         }
     }
 
     private void createOrUpdateEvent(Event existing, LocalDate targetDate) {
         JTextField titleField = new JTextField(existing != null ? existing.getTitle() : "");
-        JTextField startField = new JTextField(existing != null ? existing.getStart().toLocalTime().toString() : "12:00");
-        JTextField endField = new JTextField(existing != null ? existing.getEnd().toLocalTime().toString() : "13:00");
+        JTextField descField = new JTextField(existing != null ? existing.getDescription() : "");
+        JTextField startField = new JTextField(existing != null ? existing.getStart().toLocalTime().toString() : "09:00");
+        JTextField endField = new JTextField(existing != null ? existing.getEnd().toLocalTime().toString() : "10:00");
         JComboBox<String> recurBox = new JComboBox<>(new String[]{"NONE", "DAILY", "WEEKLY", "MONTHLY"});
-        if (existing != null) {
-            recurBox.setSelectedItem(existing.getRecurType()); // Reset the dropdown to the saved value
-        }
-        JTextField countField = new JTextField(existing != null ? String.valueOf(existing.getRecurCount()) : "1");
+        if (existing != null) recurBox.setSelectedItem(existing.getRecurType());
+        JTextField countField = new JTextField(existing != null ? String.valueOf(existing.getRecurCount()) : "0");
 
-        Object[] message = { "Title:", titleField, "Start (HH:mm):", startField, "End (HH:mm):", endField, "Repeat:", recurBox, "Count:", countField };
-        if (JOptionPane.showConfirmDialog(this, message, "Event Details", 2) == 0) {
+        Object[] message = { 
+            "Title:", titleField, 
+            "Description:", descField,
+            "Start (HH:mm):", startField, 
+            "End (HH:mm):", endField, 
+            "Repeat:", recurBox, 
+            "Times:", countField 
+        };
+        
+        if (JOptionPane.showConfirmDialog(this, message, "Event Details", JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) {
             try {
                 LocalDateTime startDT = LocalDateTime.of(targetDate, LocalTime.parse(startField.getText()));
                 LocalDateTime endDT = LocalDateTime.of(targetDate, LocalTime.parse(endField.getText()));
                 
+                if (endDT.isBefore(startDT)) {
+                    JOptionPane.showMessageDialog(this, "End time must be after start time!");
+                    return;
+                }
+                
                 int id = (existing != null) ? existing.getId() : controller.getNextEventId();
-                Event newEvent = new Event(id, titleField.getText(), "Manual", startDT, endDT, (String)recurBox.getSelectedItem(), Integer.parseInt(countField.getText()));
+                String recurType = (String)recurBox.getSelectedItem();
+                int count = Integer.parseInt(countField.getText());
+                
+                Event newEvent = new Event(id, titleField.getText(), descField.getText(), 
+                                          startDT, endDT, recurType, count);
                 
                 controller.addOrUpdateEvent(newEvent);
                 refreshUI();
-            } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Error: Check time format (HH:mm)"); }
+                JOptionPane.showMessageDialog(this, "Event saved successfully!");
+            } catch (Exception ex) { 
+                JOptionPane.showMessageDialog(this, "Error: Check time format (HH:mm)"); 
+            }
         }
     }
 
     private void handleSearch() {
-        String[] options = {"Search by Name", "Search by Date Range", "Cancel"};
+        String[] options = {"Search by Title", "Search by Date Range", "Cancel"};
         int choice = JOptionPane.showOptionDialog(this, "Select Search Type", "Search", 
-                    0, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
 
         List<Event> results = new ArrayList<>();
 
-        if (choice == 0) { // By Name
-            String query = JOptionPane.showInputDialog(this, "Enter event title:");
+        if (choice == 0) {
+            String query = JOptionPane.showInputDialog(this, "Enter event title or description:");
             if (query != null) results = controller.searchEvents(query);
             
-        } else if (choice == 1) { // By Date Range
+        } else if (choice == 1) {
             JTextField startField = new JTextField(LocalDate.now().toString());
             JTextField endField = new JTextField(LocalDate.now().plusMonths(1).toString());
             Object[] message = {
@@ -356,7 +422,7 @@ public class LaunchPage extends JFrame implements ActionListener {
             }
         }
 
-        if (choice != 2) { // If not cancelled
+        if (choice != 2) {
             displaySearchResults(results);
         }
     }
@@ -365,46 +431,140 @@ public class LaunchPage extends JFrame implements ActionListener {
         if (results.isEmpty()) {
             JOptionPane.showMessageDialog(this, "No events found.");
         } else {
-            // We temporarily hijack the List View logic to show results
-            controller.setMode(CalendarController.ViewMode.LIST);
-            viewToggle.setSelectedItem(CalendarController.ViewMode.LIST);
-            
-            // Custom refresh to show ONLY search results
-            contentPanel.removeAll();
-            JPanel listPanel = new JPanel();
-            listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
-            
+            StringBuilder sb = new StringBuilder("Found " + results.size() + " event(s):\n\n");
             for (Event e : results) {
-                listPanel.add(createEventRow(e));
-                listPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+                sb.append("• ").append(e.getStart().toLocalDate()).append(" ")
+                  .append(e.getStart().toLocalTime()).append(" - ")
+                  .append(e.getTitle());
+                if (!"NONE".equals(e.getRecurType())) {
+                    sb.append(" [").append(e.getRecurType()).append("]");
+                }
+                sb.append("\n");
             }
             
-            contentPanel.add(new JScrollPane(listPanel), BorderLayout.CENTER);
-            contentPanel.revalidate();
-            contentPanel.repaint();
+            JTextArea textArea = new JTextArea(sb.toString());
+            textArea.setEditable(false);
+            textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+            JScrollPane scrollPane = new JScrollPane(textArea);
+            scrollPane.setPreferredSize(new Dimension(500, 400));
+            
+            JOptionPane.showMessageDialog(this, scrollPane, "Search Results", JOptionPane.PLAIN_MESSAGE);
+        }
+    }
+    
+    private void showWeekListView() {
+        String input = JOptionPane.showInputDialog(this, 
+            "Enter week start date (YYYY-MM-DD):", 
+            controller.getReferenceDate().toString());
+        
+        if (input == null) return;
+        
+        try {
+            LocalDate weekStart = LocalDate.parse(input);
+            String weekList = controller.generateWeekListView(weekStart);
+            
+            JTextArea textArea = new JTextArea(weekList);
+            textArea.setEditable(false);
+            textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+            JScrollPane scrollPane = new JScrollPane(textArea);
+            scrollPane.setPreferredSize(new Dimension(500, 400));
+            
+            JOptionPane.showMessageDialog(this, scrollPane, "Week List View", JOptionPane.PLAIN_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Invalid date format!");
+        }
+    }
+    
+    private void showUpcomingNotifications() {
+        List<Event> upcoming = controller.getUpcomingEvents(24); // Next 24 hours
+        
+        if (upcoming.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No upcoming events in the next 24 hours.", 
+                                        "Notifications", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        StringBuilder sb = new StringBuilder("Upcoming Events (Next 24 Hours):\n\n");
+        LocalDateTime now = LocalDateTime.now();
+        
+        for (Event e : upcoming) {
+            long minutesUntil = java.time.Duration.between(now, e.getStart()).toMinutes();
+            long hoursUntil = minutesUntil / 60;
+            minutesUntil = minutesUntil % 60;
+            
+            sb.append("• ").append(e.getTitle()).append("\n");
+            sb.append("  Time: ").append(e.getStart().toLocalDate()).append(" ")
+              .append(e.getStart().toLocalTime()).append("\n");
+            sb.append("  In: ").append(hoursUntil).append("h ").append(minutesUntil).append("m\n\n");
+        }
+        
+        JTextArea textArea = new JTextArea(sb.toString());
+        textArea.setEditable(false);
+        textArea.setFont(new Font("Arial", Font.PLAIN, 12));
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(400, 300));
+        
+        JOptionPane.showMessageDialog(this, scrollPane, "Event Notifications", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void handleBackup() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Save Backup");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("ZIP files", "zip"));
+        fileChooser.setSelectedFile(new File("calendar_backup_" + LocalDate.now() + ".zip"));
+        
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try {
+                String path = fileChooser.getSelectedFile().getAbsolutePath();
+                if (!path.endsWith(".zip")) path += ".zip";
+                controller.performBackup(path);
+                JOptionPane.showMessageDialog(this, 
+                    "Backup completed!\n\nLocation: " + path,
+                    "Backup Success", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Backup failed: " + ex.getMessage(), 
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+    
+    private void handleRestore() {
+        String[] opts = {"Append to existing", "Replace all", "Cancel"};
+        int restoreChoice = JOptionPane.showOptionDialog(this,
+            "How would you like to restore?\n\n" +
+            "Append: Keep existing events and add imported ones\n" +
+            "Replace: Delete all current events and use only imported ones",
+            "Restore Options", JOptionPane.DEFAULT_OPTION, 
+            JOptionPane.QUESTION_MESSAGE, null, opts, opts[2]);
+        
+        if (restoreChoice == 2 || restoreChoice == -1) return;
+        
+        boolean append = (restoreChoice == 0);
+        
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select Backup File");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("ZIP files", "zip"));
+        
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try {
+                String path = fileChooser.getSelectedFile().getAbsolutePath();
+                controller.performRestore(path, append);
+                refreshUI();
+                JOptionPane.showMessageDialog(this, "Restore complete!", 
+                    "Restore Success", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Restore failed: " + ex.getMessage(), 
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        if (e.getSource() == buttonPrev) navigate(-1);
-        else if (e.getSource() == buttonNext) navigate(1);
-        else if (e.getSource() == buttonAdd) createOrUpdateEvent(null, controller.getReferenceDate());
-        else if (e.getSource() == buttonSearch) handleSearch();
-        else if (e.getSource() == buttonBackup) {
-            try {
-                controller.performBackup("calendar_backup.zip");
-                JOptionPane.showMessageDialog(this, "Data successfully backed up!");
-            } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Backup failed: " + ex.getMessage()); }
-        } else if (e.getSource() == buttonRestore) {
-            int confirm = JOptionPane.showConfirmDialog(this, "Overwrite current events?", "Confirm Restore", JOptionPane.YES_NO_OPTION);
-            if (confirm == JOptionPane.YES_OPTION) {
-                try {
-                    controller.performRestore("calendar_backup.zip");
-                    refreshUI();
-                    JOptionPane.showMessageDialog(this, "Restore complete!");
-                } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Restore failed."); }
-            }
+        if (e.getSource() == buttonPrev) {
+            navigate(-1);
+        } else if (e.getSource() == buttonNext) {
+            navigate(1);
         }
     }
 }

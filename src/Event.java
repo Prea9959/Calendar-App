@@ -1,4 +1,5 @@
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class Event {
     private int id;
@@ -7,11 +8,13 @@ public class Event {
     private LocalDateTime start;
     private LocalDateTime end;
     
-    // NEW FIELDS
     private String recurType; // "NONE", "DAILY", "WEEKLY", "MONTHLY"
     private int recurCount;   // How many times it repeats
 
-    // Constructor
+    // Date formatter for CSV
+    public static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
+    // Full Constructor
     public Event(int id, String title, String description, LocalDateTime start, LocalDateTime end, String recurType, int recurCount) {
         this.id = id;
         this.title = title;
@@ -36,12 +39,11 @@ public class Event {
     public String getRecurType() { return recurType; }
     public int getRecurCount() { return recurCount; }
 
-    // --- SETTERS (Required to fix "Method is undefined") ---
+    // --- SETTERS ---
     public void setTitle(String title) { this.title = title; }
+    public void setDescription(String description) { this.description = description; }
     public void setStart(LocalDateTime start) { this.start = start; }
     public void setEnd(LocalDateTime end) { this.end = end; }
-    
-    // These are the specific ones you were missing:
     public void setRecurType(String recurType) { this.recurType = recurType; }
     public void setRecurCount(int recurCount) { this.recurCount = recurCount; }
 
@@ -61,7 +63,7 @@ public class Event {
     }
 
     public LocalDateTime getOccurrence(int index) {
-        switch (recurType) {
+        switch (recurType.toUpperCase()) {
             case "DAILY": return start.plusDays(index);
             case "WEEKLY": return start.plusWeeks(index);
             case "MONTHLY": return start.plusMonths(index);
@@ -69,19 +71,23 @@ public class Event {
         }
     }
 
-    // CSV Parsing Helper
+    // CSV Parsing Helper (reads from event.csv format)
     public static Event fromCSV(String csvLine) {
-    try {
-        String[] parts = csvLine.split(",");
-        int id = Integer.parseInt(parts[0]);
-        String title = parts[1];
-        String desc = parts[2];
-        LocalDateTime start = LocalDateTime.parse(parts[3]);
-        LocalDateTime end = LocalDateTime.parse(parts[4]);
-        
-        return new Event(id, title, desc, start, end, "NONE", 0);
-    } catch (Exception e) {
-        return null; 
-    }
+        try {
+            String[] parts = csvLine.split(",", 5); // Limit to 5 parts
+            if (parts.length < 5) return null;
+            
+            int id = Integer.parseInt(parts[0].trim());
+            String title = parts[1].trim();
+            String desc = parts[2].trim();
+            LocalDateTime start = LocalDateTime.parse(parts[3].trim(), FMT);
+            LocalDateTime end = LocalDateTime.parse(parts[4].trim(), FMT);
+            
+            return new Event(id, title, desc, start, end, "NONE", 0);
+        } catch (Exception e) {
+            System.err.println("Error parsing CSV line: " + csvLine);
+            e.printStackTrace();
+            return null;
+        }
     }
 }
