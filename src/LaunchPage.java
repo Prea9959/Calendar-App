@@ -63,7 +63,8 @@ public class LaunchPage extends JFrame implements ActionListener {
         scaleToggle.setSelectedItem(CalendarController.TimeScale.MONTH);
 
         // Month and Year Selectors
-        String[] months = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+        String[] months = {"January", "February", "March", "April", "May", "June", 
+                          "July", "August", "September", "October", "November", "December"};
         monthSelector = new JComboBox<>(months);
         
         // Generate years (current year ± 10 years)
@@ -191,13 +192,9 @@ public class LaunchPage extends JFrame implements ActionListener {
         String dateString = controller.getReferenceDate().format(dateFormat);
         this.setTitle("Calendar - " + dateString + " (" + controller.getMode() + ")");
 
-        if (controller.getScale() == CalendarController.TimeScale.DAY) {
-            renderDayView(); // <--- Call the new method here
-        } 
-        else if (controller.getMode() == CalendarController.ViewMode.CALENDAR) {
+        if (controller.getMode() == CalendarController.ViewMode.CALENDAR) {
             renderCalendarView();
-        } 
-        else {
+        } else {
             renderListView();
         }
 
@@ -207,6 +204,13 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     // --- CALENDAR VIEW RENDERING ---
     private void renderCalendarView() {
+        // If viewing a single DAY, show timeline view
+        if (controller.getScale() == CalendarController.TimeScale.DAY) {
+            renderDayTimelineView();
+            return;
+        }
+        
+        // Otherwise show grid view (WEEK or MONTH)
         JPanel grid = new JPanel(new GridLayout(0, 7, 2, 2));
         String[] days = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
         for (String d : days) {
@@ -217,7 +221,7 @@ public class LaunchPage extends JFrame implements ActionListener {
 
         LocalDate start = controller.getStartOfRange();
         int length = (controller.getScale() == CalendarController.TimeScale.MONTH) ? 
-        controller.getReferenceDate().lengthOfMonth() : 7;
+                      controller.getReferenceDate().lengthOfMonth() : 7;
         
         if (controller.getScale() == CalendarController.TimeScale.MONTH) {
             int startPadding = controller.getReferenceDate().withDayOfMonth(1).getDayOfWeek().getValue() % 7;
@@ -232,81 +236,164 @@ public class LaunchPage extends JFrame implements ActionListener {
         }
         contentPanel.add(grid, BorderLayout.CENTER);
     }
-
-    private void renderDayView() {
-        // 1. Setup the container
-        // We use null layout so we can place buttons at exact pixel coordinates
-        JPanel timeLinePanel = new JPanel(null); 
-        timeLinePanel.setBackground(Color.WHITE);
+    
+    // Render full-screen day timeline view when DAY scale is selected
+    private void renderDayTimelineView() {
+        LocalDate date = controller.getReferenceDate();
+        List<Event> dayEvents = controller.getEventsOnDate(date);
         
-        // Calculate total height: 24 hours * 60 pixels per hour = 1440 pixels tall
-        int rowHeight = 60;
-        int totalHeight = 24 * rowHeight;
-        timeLinePanel.setPreferredSize(new Dimension(contentPanel.getWidth() - 20, totalHeight));
-
-        // 2. Draw Time Labels (The Background Grid)
-        for (int hour = 0; hour < 24; hour++) {
-            // Label (e.g., "09:00")
-            JLabel timeLabel = new JLabel(String.format("%02d:00", hour));
-            timeLabel.setBounds(10, hour * rowHeight, 50, 20); // x, y, width, height
-            timeLabel.setForeground(Color.GRAY);
-            timeLinePanel.add(timeLabel);
-
-            // Horizontal Line
-            JPanel line = new JPanel();
-            line.setBackground(new Color(230, 230, 230));
-            line.setBounds(60, hour * rowHeight, 2000, 1); // Stretch across
-            timeLinePanel.add(line);
-        }
-
-        // 3. Place Events
-        // Ask controller for today's events
-        List<Event> daysEvents = controller.getEventsOnDate(controller.getReferenceDate());
-
-        for (Event e : daysEvents) {
-            // Calculate Top Position (Start Time)
-            int startHour = e.getStart().getHour();
-            int startMin = e.getStart().getMinute();
-            int y = (startHour * rowHeight) + startMin; // 1 min = 1 pixel
-
-            // Calculate Height (Duration)
-            int endHour = e.getEnd().getHour();
-            int endMin = e.getEnd().getMinute();
-            // Handle case where event wraps to next day (cap at midnight for viewing)
-            if (e.getEnd().toLocalDate().isAfter(e.getStart().toLocalDate())) {
-                endHour = 24; endMin = 0;
-            }
-            
-            int startTotalMins = (startHour * 60) + startMin;
-            int endTotalMins = (endHour * 60) + endMin;
-            int durationMins = endTotalMins - startTotalMins;
-            
-            // Minimum height of 20px so user can see short events
-            int height = Math.max(20, durationMins);
-
-            // Create the Event "Block"
-            JButton eventBlock = new JButton("<html>" + e.getTitle() + "</html>");
-            eventBlock.setFont(new Font("Arial", Font.PLAIN, 10));
-            eventBlock.setBackground(new Color(173, 216, 230)); // Light Blue
-            eventBlock.setBorder(BorderFactory.createLineBorder(Color.BLUE));
-            eventBlock.setVerticalAlignment(SwingConstants.TOP);
-            eventBlock.setHorizontalAlignment(SwingConstants.LEFT);
-
-            // Set Position: x=70 (after time labels), width=200 (or dynamic)
-            eventBlock.setBounds(70, y, 200, height);
-            
-            // Add click listener to edit
-            eventBlock.addActionListener(evt -> createOrUpdateEvent(e, controller.getReferenceDate()));
-
-            timeLinePanel.add(eventBlock);
-        }
-
-        // 4. Add to the main ScrollPane
-        contentPanel.add(timeLinePanel, BorderLayout.CENTER);
-        SwingUtilities.invokeLater(() -> {
-            JScrollPane scrollPane = (JScrollPane) bodyPanel.getComponent(0); // Access the scroll pane
-            scrollPane.getVerticalScrollBar().setValue(480); 
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        
+        // Header with day name, date, and navigation
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(new Color(70, 130, 180));
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        JLabel headerLabel = new JLabel(date.getDayOfWeek() + ", " + date);
+        headerLabel.setFont(new Font("Arial", Font.BOLD, 20));
+        headerLabel.setForeground(Color.WHITE);
+        headerPanel.add(headerLabel, BorderLayout.CENTER);
+        
+        // Add event button
+        JButton addEventBtn = new JButton("+ Add Event");
+        addEventBtn.setFocusable(false);
+        addEventBtn.addActionListener(e -> {
+            createOrUpdateEvent(null, date);
         });
+        headerPanel.add(addEventBtn, BorderLayout.EAST);
+        
+        mainPanel.add(headerPanel, BorderLayout.NORTH);
+        
+        // Timeline panel
+        JPanel timelinePanel = new JPanel();
+        timelinePanel.setLayout(new BoxLayout(timelinePanel, BoxLayout.Y_AXIS));
+        timelinePanel.setBackground(Color.WHITE);
+        
+        // Create 24-hour timeline
+        for (int hour = 0; hour < 24; hour++) {
+            JPanel hourSlot = createLargeHourSlot(hour, dayEvents, date);
+            timelinePanel.add(hourSlot);
+        }
+        
+        JScrollPane scrollPane = new JScrollPane(timelinePanel);
+        mainPanel.add(scrollPane, BorderLayout.CENTER);
+        
+        // Footer with event count and current time
+        JPanel footerPanel = new JPanel(new BorderLayout());
+        footerPanel.setBackground(new Color(240, 240, 240));
+        footerPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        
+        JLabel eventCountLabel = new JLabel("Total Events: " + dayEvents.size());
+        eventCountLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+        footerPanel.add(eventCountLabel, BorderLayout.WEST);
+        
+        if (date.equals(LocalDate.now())) {
+            JLabel currentTimeLabel = new JLabel("Current Time: " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")));
+            currentTimeLabel.setFont(new Font("Arial", Font.BOLD, 12));
+            currentTimeLabel.setForeground(new Color(0, 100, 0));
+            footerPanel.add(currentTimeLabel, BorderLayout.EAST);
+        }
+        
+        mainPanel.add(footerPanel, BorderLayout.SOUTH);
+        
+        contentPanel.add(mainPanel, BorderLayout.CENTER);
+    }
+    
+    // Create a larger hour slot for full-screen day view
+    private JPanel createLargeHourSlot(int hour, List<Event> dayEvents, LocalDate date) {
+        JPanel slot = new JPanel(new BorderLayout());
+        slot.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
+        slot.setBackground(Color.WHITE);
+        slot.setMaximumSize(new Dimension(Integer.MAX_VALUE, 80));
+        slot.setPreferredSize(new Dimension(800, 80));
+        
+        // Highlight current hour if viewing today
+        if (date.equals(LocalDate.now()) && LocalTime.now().getHour() == hour) {
+            slot.setBackground(new Color(255, 255, 220)); // Light yellow
+        }
+        
+        // Time label (24-hour format)
+        JPanel timePanel = new JPanel(new BorderLayout());
+        timePanel.setBackground(slot.getBackground());
+        timePanel.setPreferredSize(new Dimension(80, 80));
+        
+        JLabel timeLabel = new JLabel(String.format("%02d:00", hour), SwingConstants.CENTER);
+        timeLabel.setFont(new Font("Monospaced", Font.BOLD, 16));
+        timeLabel.setForeground(new Color(100, 100, 100));
+        timePanel.add(timeLabel, BorderLayout.CENTER);
+        
+        slot.add(timePanel, BorderLayout.WEST);
+        
+        // Event panel (shows events during this hour)
+        JPanel eventPanel = new JPanel();
+        eventPanel.setLayout(new BoxLayout(eventPanel, BoxLayout.Y_AXIS));
+        eventPanel.setBackground(slot.getBackground());
+        eventPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        
+        // Find events that occur during this hour
+        boolean hasEvents = false;
+        for (Event event : dayEvents) {
+            int eventStartHour = event.getStart().getHour();
+            int eventEndHour = event.getEnd().getHour();
+            
+            // Check if event occurs during this hour
+            if (eventStartHour <= hour && hour < eventEndHour) {
+                hasEvents = true;
+                JPanel eventBar = new JPanel(new BorderLayout());
+                eventBar.setBackground(new Color(173, 216, 230));
+                eventBar.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(100, 149, 237), 2),
+                    BorderFactory.createEmptyBorder(5, 8, 5, 8)
+                ));
+                eventBar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                
+                // Make event clickable
+                eventBar.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseClicked(MouseEvent e) {
+                        createOrUpdateEvent(event, date);
+                    }
+                });
+                
+                JPanel infoPanel = new JPanel(new BorderLayout());
+                infoPanel.setOpaque(false);
+                
+                String eventText = event.getTitle();
+                JLabel titleLabel = new JLabel(eventText);
+                titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
+                infoPanel.add(titleLabel, BorderLayout.NORTH);
+                
+                String timeText = event.getStart().toLocalTime() + " - " + event.getEnd().toLocalTime();
+                JLabel timeInfoLabel = new JLabel(timeText);
+                timeInfoLabel.setFont(new Font("Arial", Font.PLAIN, 11));
+                timeInfoLabel.setForeground(new Color(80, 80, 80));
+                infoPanel.add(timeInfoLabel, BorderLayout.CENTER);
+                
+                eventBar.add(infoPanel, BorderLayout.CENTER);
+                
+                // Add recurring indicator
+                if (!"NONE".equals(event.getRecurType())) {
+                    JLabel recurLabel = new JLabel("  [R]  ");
+                    recurLabel.setFont(new Font("Arial", Font.BOLD, 12));
+                    recurLabel.setForeground(new Color(255, 140, 0));
+                    eventBar.add(recurLabel, BorderLayout.EAST);
+                }
+                
+                eventPanel.add(eventBar);
+                eventPanel.add(Box.createVerticalStrut(3));
+            }
+        }
+        
+        // Show empty slot message if no events
+        if (!hasEvents) {
+            JLabel emptyLabel = new JLabel("No events");
+            emptyLabel.setFont(new Font("Arial", Font.ITALIC, 11));
+            emptyLabel.setForeground(Color.GRAY);
+            eventPanel.add(emptyLabel);
+        }
+        
+        slot.add(eventPanel, BorderLayout.CENTER);
+        return slot;
     }
 
     private JButton createDayButton(LocalDate date) {
@@ -385,44 +472,150 @@ public class LaunchPage extends JFrame implements ActionListener {
     private void showDayEvents(LocalDate date) {
         List<Event> dayEvents = controller.getEventsOnDate(date);
         
-        if (dayEvents.isEmpty()) {
-            int choice = JOptionPane.showConfirmDialog(this, "No events. Add one?", "Day View", JOptionPane.YES_NO_OPTION);
-            if (choice == JOptionPane.YES_OPTION) createOrUpdateEvent(null, date);
-            return;
-        }
-
-        DefaultListModel<String> listModel = new DefaultListModel<>();
-        for (Event e : dayEvents) {
-            String recurMark = !"NONE".equals(e.getRecurType()) ? " [R]" : "";
-            listModel.addElement(e.getStart().toLocalTime() + " - " + e.getTitle() + recurMark);
-        }
+        // Create a day schedule view with timeline
+        JPanel dayViewPanel = createDayScheduleView(date, dayEvents);
         
-        JList<String> eventJList = new JList<>(listModel);
-        eventJList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        eventJList.setSelectedIndex(0);
+        Object[] options = {"Add New Event", "Edit Event", "Delete Event", "Close"};
+        int choice = JOptionPane.showOptionDialog(
+            this, 
+            dayViewPanel, 
+            "Schedule for " + date.getDayOfWeek() + ", " + date,
+            JOptionPane.DEFAULT_OPTION, 
+            JOptionPane.PLAIN_MESSAGE, 
+            null, 
+            options, 
+            options[3]
+        );
 
-        JScrollPane scrollPane = new JScrollPane(eventJList);
-        scrollPane.setPreferredSize(new Dimension(350, 150));
-
-        Object[] message = {"Select an event:", scrollPane};
-        Object[] options = {"Edit Selected", "Delete Selected", "Add New", "Close"};
-        
-        int choice = JOptionPane.showOptionDialog(this, message, "Events for " + date.format(dateFormat),
-                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[3]);
-
-        int selectedIdx = eventJList.getSelectedIndex();
-        
-        if (choice == 0 && selectedIdx != -1) {
-            createOrUpdateEvent(dayEvents.get(selectedIdx), date);
-        } else if (choice == 1 && selectedIdx != -1) {
-            int confirm = JOptionPane.showConfirmDialog(this, "Delete this event?");
-            if (confirm == JOptionPane.YES_OPTION) {
-                controller.deleteEvent(dayEvents.get(selectedIdx));
-                refreshUI();
-            }
-        } else if (choice == 2) {
+        if (choice == 0) { // Add New
             createOrUpdateEvent(null, date);
+        } else if (choice == 1 && !dayEvents.isEmpty()) { // Edit
+            String[] eventTitles = dayEvents.stream()
+                .map(e -> e.getStart().toLocalTime() + " - " + e.getTitle())
+                .toArray(String[]::new);
+            String selected = (String) JOptionPane.showInputDialog(
+                this, "Select event to edit:", "Edit Event",
+                JOptionPane.QUESTION_MESSAGE, null, eventTitles, eventTitles[0]
+            );
+            if (selected != null) {
+                int index = java.util.Arrays.asList(eventTitles).indexOf(selected);
+                createOrUpdateEvent(dayEvents.get(index), date);
+            }
+        } else if (choice == 2 && !dayEvents.isEmpty()) { // Delete
+            String[] eventTitles = dayEvents.stream()
+                .map(e -> e.getStart().toLocalTime() + " - " + e.getTitle())
+                .toArray(String[]::new);
+            String selected = (String) JOptionPane.showInputDialog(
+                this, "Select event to delete:", "Delete Event",
+                JOptionPane.QUESTION_MESSAGE, null, eventTitles, eventTitles[0]
+            );
+            if (selected != null) {
+                int index = java.util.Arrays.asList(eventTitles).indexOf(selected);
+                int confirm = JOptionPane.showConfirmDialog(this, "Delete this event?");
+                if (confirm == JOptionPane.YES_OPTION) {
+                    controller.deleteEvent(dayEvents.get(index));
+                    refreshUI();
+                }
+            }
         }
+    }
+    
+    // Create a visual day schedule with timeline
+    private JPanel createDayScheduleView(LocalDate date, List<Event> dayEvents) {
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setPreferredSize(new Dimension(600, 500));
+        
+        // Header with day name and date
+        JPanel headerPanel = new JPanel();
+        headerPanel.setBackground(new Color(70, 130, 180));
+        JLabel headerLabel = new JLabel(date.getDayOfWeek() + ", " + date);
+        headerLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        headerLabel.setForeground(Color.WHITE);
+        headerPanel.add(headerLabel);
+        mainPanel.add(headerPanel, BorderLayout.NORTH);
+        
+        // Timeline panel
+        JPanel timelinePanel = new JPanel();
+        timelinePanel.setLayout(new BoxLayout(timelinePanel, BoxLayout.Y_AXIS));
+        timelinePanel.setBackground(Color.WHITE);
+        
+        // Create 24-hour timeline
+        for (int hour = 0; hour < 24; hour++) {
+            JPanel hourSlot = createHourSlot(hour, dayEvents);
+            timelinePanel.add(hourSlot);
+        }
+        
+        JScrollPane scrollPane = new JScrollPane(timelinePanel);
+        scrollPane.setPreferredSize(new Dimension(580, 400));
+        mainPanel.add(scrollPane, BorderLayout.CENTER);
+        
+        // Footer with event count
+        JPanel footerPanel = new JPanel();
+        footerPanel.setBackground(new Color(240, 240, 240));
+        JLabel footerLabel = new JLabel("Total Events: " + dayEvents.size());
+        footerLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+        footerPanel.add(footerLabel);
+        mainPanel.add(footerPanel, BorderLayout.SOUTH);
+        
+        return mainPanel;
+    }
+    
+    // Create a single hour slot in the timeline
+    private JPanel createHourSlot(int hour, List<Event> dayEvents) {
+        JPanel slot = new JPanel(new BorderLayout());
+        slot.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
+        slot.setBackground(Color.WHITE);
+        slot.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
+        slot.setPreferredSize(new Dimension(550, 60));
+        
+        // Time label (24-hour format)
+        JLabel timeLabel = new JLabel(String.format("%02d:00", hour));
+        timeLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
+        timeLabel.setForeground(new Color(100, 100, 100));
+        timeLabel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        slot.add(timeLabel, BorderLayout.WEST);
+        
+        // Event panel (shows events during this hour)
+        JPanel eventPanel = new JPanel();
+        eventPanel.setLayout(new BoxLayout(eventPanel, BoxLayout.Y_AXIS));
+        eventPanel.setBackground(Color.WHITE);
+        
+        // Find events that occur during this hour
+        for (Event event : dayEvents) {
+            int eventStartHour = event.getStart().getHour();
+            int eventEndHour = event.getEnd().getHour();
+            
+            // Check if event occurs during this hour
+            if (eventStartHour <= hour && hour < eventEndHour) {
+                JPanel eventBar = new JPanel(new BorderLayout());
+                eventBar.setBackground(new Color(173, 216, 230));
+                eventBar.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(100, 149, 237), 2),
+                    BorderFactory.createEmptyBorder(3, 5, 3, 5)
+                ));
+                
+                String eventText = event.getTitle() + " (" + 
+                                 event.getStart().toLocalTime() + " - " + 
+                                 event.getEnd().toLocalTime() + ")";
+                JLabel eventLabel = new JLabel(eventText);
+                eventLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+                eventBar.add(eventLabel, BorderLayout.CENTER);
+                
+                // Add recurring indicator
+                if (!"NONE".equals(event.getRecurType())) {
+                    JLabel recurLabel = new JLabel("[R]");
+                    recurLabel.setFont(new Font("Arial", Font.BOLD, 10));
+                    recurLabel.setForeground(new Color(255, 140, 0));
+                    eventBar.add(recurLabel, BorderLayout.EAST);
+                }
+                
+                eventPanel.add(eventBar);
+                eventPanel.add(Box.createVerticalStrut(2));
+            }
+        }
+        
+        slot.add(eventPanel, BorderLayout.CENTER);
+        return slot;
     }
 
     private void createOrUpdateEvent(Event existing, LocalDate targetDate) {
@@ -457,7 +650,8 @@ public class LaunchPage extends JFrame implements ActionListener {
                 String recurType = (String)recurBox.getSelectedItem();
                 int count = Integer.parseInt(countField.getText());
                 
-                Event newEvent = new Event(id, titleField.getText(), descField.getText(), startDT, endDT, recurType, count);
+                Event newEvent = new Event(id, titleField.getText(), descField.getText(), 
+                                          startDT, endDT, recurType, count);
                 
                 controller.addOrUpdateEvent(newEvent);
                 refreshUI();
@@ -512,8 +706,8 @@ public class LaunchPage extends JFrame implements ActionListener {
             StringBuilder sb = new StringBuilder("Found " + results.size() + " event(s):\n\n");
             for (Event e : results) {
                 sb.append("• ").append(e.getStart().toLocalDate()).append(" ")
-                .append(e.getStart().toLocalTime()).append(" - ")
-                .append(e.getTitle());
+                  .append(e.getStart().toLocalTime()).append(" - ")
+                  .append(e.getTitle());
                 if (!"NONE".equals(e.getRecurType())) {
                     sb.append(" [").append(e.getRecurType()).append("]");
                 }
@@ -557,7 +751,8 @@ public class LaunchPage extends JFrame implements ActionListener {
         List<Event> upcoming = controller.getUpcomingEvents(24); // Next 24 hours
         
         if (upcoming.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No upcoming events in the next 24 hours.", "Notifications", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "No upcoming events in the next 24 hours.", 
+                                        "Notifications", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         
@@ -571,7 +766,7 @@ public class LaunchPage extends JFrame implements ActionListener {
             
             sb.append("• ").append(e.getTitle()).append("\n");
             sb.append("  Time: ").append(e.getStart().toLocalDate()).append(" ")
-            .append(e.getStart().toLocalTime()).append("\n");
+              .append(e.getStart().toLocalTime()).append("\n");
             sb.append("  In: ").append(hoursUntil).append("h ").append(minutesUntil).append("m\n\n");
         }
         
