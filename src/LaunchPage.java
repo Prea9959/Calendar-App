@@ -20,6 +20,22 @@ public class LaunchPage extends JFrame implements ActionListener {
     JComboBox<String> monthSelector, yearSelector;
     JButton buttonPrev, buttonNext;
 
+    // Colour Palette
+    final Color THEME_LIGHTEST = new Color(252, 248, 248);  // Color 1: #FCF8F8 (Backgrounds / Lightest)
+    final Color THEME_LIGHT = new Color(251, 239, 239);     // Color 2: #FBEFEF (Headers / Soft Pink)
+    final Color THEME_MEDIUM = new Color(249, 223, 223);    // Color 3: #F9DFDF (Events / Medium Pink)
+    final Color THEME_DARK = new Color(245, 175, 175);      // Color 4: #F5AFAF (Highlights / Borders / Darkest)
+
+    final Color HEADER_BG = THEME_LIGHT;            // The top menu bar
+    final Color DAY_HEADER_BG = THEME_DARK;         // The header in Day View (was steel blue)
+    final Color EVENT_BG = THEME_MEDIUM;            // The event blocks themselves
+    final Color EVENT_BORDER = THEME_DARK;          // Borders around events
+    final Color TODAY_BORDER = THEME_DARK;          // The box around "Today"
+    
+    // For the calendar grid buttons:
+    final Color NO_CONFLICT_BG = THEME_LIGHTEST;    // Normal days are very pale pink
+    final Color CONFLICT_BG = THEME_DARK;
+
     // Design
     Font dayFont = new Font("Arial", Font.BOLD, 24);
     Font labelFont = new Font("Arial", Font.BOLD, 18);
@@ -50,7 +66,7 @@ public class LaunchPage extends JFrame implements ActionListener {
 
     private void setupHeader() {
         headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(new Color(240, 240, 240));
+        headerPanel.setBackground(HEADER_BG);
 
         JPanel leftContainer = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
         JPanel rightContainer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
@@ -63,8 +79,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         scaleToggle.setSelectedItem(CalendarController.TimeScale.MONTH);
 
         // Month and Year Selectors
-        String[] months = {"January", "February", "March", "April", "May", "June", 
-                          "July", "August", "September", "October", "November", "December"};
+        String[] months = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
         monthSelector = new JComboBox<>(months);
         
         // Generate years (current year ± 10 years)
@@ -246,7 +261,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         
         // Header with day name, date, and navigation
         JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(new Color(70, 130, 180));
+        headerPanel.setBackground(DAY_HEADER_BG);
         headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
         JLabel headerLabel = new JLabel(date.getDayOfWeek() + ", " + date);
@@ -340,9 +355,9 @@ public class LaunchPage extends JFrame implements ActionListener {
             if (eventStartHour <= hour && hour < eventEndHour) {
                 hasEvents = true;
                 JPanel eventBar = new JPanel(new BorderLayout());
-                eventBar.setBackground(new Color(173, 216, 230));
+                eventBar.setBackground(EVENT_BG);
                 eventBar.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(new Color(100, 149, 237), 2),
+                    BorderFactory.createLineBorder(EVENT_BORDER, 2),
                     BorderFactory.createEmptyBorder(5, 8, 5, 8)
                 ));
                 eventBar.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -407,11 +422,11 @@ public class LaunchPage extends JFrame implements ActionListener {
         btn.setFocusable(false);
         btn.setFont(dayFont);
         
-        if (date.equals(LocalDate.now())) btn.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
+        if (date.equals(LocalDate.now())) btn.setBorder(BorderFactory.createLineBorder(TODAY_BORDER, 2));
         
         if (!dayEvents.isEmpty()) {
             boolean conflict = controller.checkForConflictOnDate(dayEvents);
-            btn.setBackground(conflict ? new Color(255, 180, 180) : new Color(200, 230, 255));
+            btn.setBackground(conflict ? CONFLICT_BG : NO_CONFLICT_BG);
         }
 
         btn.addActionListener(e -> showDayEvents(date));
@@ -594,9 +609,7 @@ public class LaunchPage extends JFrame implements ActionListener {
                     BorderFactory.createEmptyBorder(3, 5, 3, 5)
                 ));
                 
-                String eventText = event.getTitle() + " (" + 
-                                 event.getStart().toLocalTime() + " - " + 
-                                 event.getEnd().toLocalTime() + ")";
+                String eventText = event.getTitle() + " (" + event.getStart().toLocalTime() + " - " + event.getEnd().toLocalTime() + ")";
                 JLabel eventLabel = new JLabel(eventText);
                 eventLabel.setFont(new Font("Arial", Font.PLAIN, 12));
                 eventBar.add(eventLabel, BorderLayout.CENTER);
@@ -650,8 +663,7 @@ public class LaunchPage extends JFrame implements ActionListener {
                 String recurType = (String)recurBox.getSelectedItem();
                 int count = Integer.parseInt(countField.getText());
                 
-                Event newEvent = new Event(id, titleField.getText(), descField.getText(), 
-                                          startDT, endDT, recurType, count);
+                Event newEvent = new Event(id, titleField.getText(), descField.getText(), startDT, endDT, recurType, count);
                 
                 controller.addOrUpdateEvent(newEvent);
                 refreshUI();
@@ -706,8 +718,8 @@ public class LaunchPage extends JFrame implements ActionListener {
             StringBuilder sb = new StringBuilder("Found " + results.size() + " event(s):\n\n");
             for (Event e : results) {
                 sb.append("• ").append(e.getStart().toLocalDate()).append(" ")
-                  .append(e.getStart().toLocalTime()).append(" - ")
-                  .append(e.getTitle());
+                .append(e.getStart().toLocalTime()).append(" - ")
+                .append(e.getTitle());
                 if (!"NONE".equals(e.getRecurType())) {
                     sb.append(" [").append(e.getRecurType()).append("]");
                 }
@@ -765,8 +777,7 @@ public class LaunchPage extends JFrame implements ActionListener {
             minutesUntil = minutesUntil % 60;
             
             sb.append("• ").append(e.getTitle()).append("\n");
-            sb.append("  Time: ").append(e.getStart().toLocalDate()).append(" ")
-              .append(e.getStart().toLocalTime()).append("\n");
+            sb.append("  Time: ").append(e.getStart().toLocalDate()).append(" ").append(e.getStart().toLocalTime()).append("\n");
             sb.append("  In: ").append(hoursUntil).append("h ").append(minutesUntil).append("m\n\n");
         }
         
