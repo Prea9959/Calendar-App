@@ -422,7 +422,7 @@ public class LaunchPage extends JFrame implements ActionListener {
         btn.setFocusable(false);
         btn.setFont(dayFont);
         
-        if (date.equals(LocalDate.now())) btn.setBorder(BorderFactory.createLineBorder(TODAY_BORDER, 2));
+        if (date.equals(LocalDate.now())) btn.setBorder(BorderFactory.createLineBorder(TODAY_BORDER, 5));
         
         if (!dayEvents.isEmpty()) {
             boolean conflict = controller.checkForConflictOnDate(dayEvents);
