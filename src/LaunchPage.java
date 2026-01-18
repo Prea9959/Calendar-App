@@ -236,7 +236,7 @@ public class LaunchPage extends JFrame implements ActionListener {
 
         LocalDate start = controller.getStartOfRange();
         int length = (controller.getScale() == CalendarController.TimeScale.MONTH) ? 
-                      controller.getReferenceDate().lengthOfMonth() : 7;
+                    controller.getReferenceDate().lengthOfMonth() : 7;
         
         if (controller.getScale() == CalendarController.TimeScale.MONTH) {
             int startPadding = controller.getReferenceDate().withDayOfMonth(1).getDayOfWeek().getValue() % 7;
